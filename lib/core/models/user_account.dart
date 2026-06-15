@@ -1,0 +1,18 @@
+enum UserRole { hrManager, manager, employee }
+
+class UserAccount {
+  final String email;
+  final String password;
+  final String employeeId;
+  final UserRole role;
+
+  const UserAccount({
+    required this.email,
+    required this.password,
+    required this.employeeId,
+    required this.role,
+  });
+
+  bool get isManager =>
+      role == UserRole.hrManager || role == UserRole.manager;
+}

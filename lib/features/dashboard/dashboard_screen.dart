@@ -1,0 +1,966 @@
+import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/data/mock_data.dart';
+import '../../core/models/employee.dart';
+import '../../core/models/leave_request.dart';
+import '../../core/services/auth_service.dart';
+import '../../shared/widgets/app_widgets.dart';
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = AuthService.instance;
+    final employee = auth.currentEmployee;
+    final isManager = auth.isManager;
+    final now = DateTime.now();
+    final greeting = _greeting();
+
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          _buildAppBar(employee, greeting, now),
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                if (isManager) _buildRoleBanner(true) else _buildRoleBanner(false),
+                const SizedBox(height: 16),
+                _buildQuickActions(context, isManager),
+                const SizedBox(height: 20),
+                if (isManager) ...[
+                  _buildStatsGrid(context),
+                  const SizedBox(height: 20),
+                  _buildAttendanceCard(employee),
+                  const SizedBox(height: 20),
+                  _buildHeadcountChart(),
+                  const SizedBox(height: 20),
+                  _buildPendingLeaveSection(context),
+                  const SizedBox(height: 20),
+                  _buildBirthdays(),
+                ] else ...[
+                  _buildMyStatsGrid(context, employee),
+                  const SizedBox(height: 20),
+                  _buildAttendanceCard(employee),
+                  const SizedBox(height: 20),
+                  _buildMyLeaveCard(context, employee),
+                ],
+                const SizedBox(height: 80),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  Widget _buildAppBar(Employee employee, String greeting, DateTime now) {
+    return SliverAppBar(
+      expandedHeight: 160,
+      floating: false,
+      pinned: true,
+      backgroundColor: AppColors.primary,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppColors.primary, Color(0xFF283593)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$greeting,',
+                          style: AppTextStyles.body1
+                              .copyWith(color: Colors.white.withValues(alpha: 0.8)),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          employee.firstName,
+                          style: AppTextStyles.displayLarge
+                              .copyWith(color: Colors.white, fontSize: 24),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today_rounded,
+                                color: Colors.white54, size: 13),
+                            const SizedBox(width: 4),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy').format(now),
+                              style: AppTextStyles.caption
+                                  .copyWith(color: Colors.white60),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => context.go('/notifications'),
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.notifications_outlined,
+                              color: Colors.white, size: 22),
+                        ),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF5252),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => context.go('/profile'),
+                    child: AvatarWidget(
+                      initials: employee.initials,
+                      color: Colors.white,
+                      size: 44,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        collapseMode: CollapseMode.pin,
+      ),
+      title: Text('Dashboard',
+          style: AppTextStyles.heading2.copyWith(color: Colors.white)),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.notifications_outlined,
+              color: Colors.white, size: 22),
+          onPressed: () => context.go('/notifications'),
+        ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  Widget _buildRoleBanner(bool isManager) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isManager
+            ? AppColors.primaryLighter
+            : AppColors.accentLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isManager
+              ? AppColors.primary.withValues(alpha: 0.25)
+              : AppColors.accent.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isManager ? Icons.admin_panel_settings_rounded : Icons.badge_rounded,
+            color: isManager ? AppColors.primary : AppColors.accent,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isManager
+                  ? 'Logged in as HR Manager — full access'
+                  : 'Logged in as Employee — personal view',
+              style: AppTextStyles.body2.copyWith(
+                color: isManager ? AppColors.primary : AppColors.accent,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyStatsGrid(BuildContext context, dynamic employee) {
+    final myLeaves = MockData.leaveRequests
+        .where((l) => l.employeeId == employee.id)
+        .toList();
+    final pendingCount =
+        myLeaves.where((l) => l.status.name == 'pending').length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('My Overview', style: AppTextStyles.heading2),
+        const SizedBox(height: 12),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
+          children: [
+            StatCard(
+              title: 'Leave Balance',
+              value: '${employee.leaveBalance}d',
+              icon: Icons.beach_access_rounded,
+              color: AppColors.accent,
+              subtitle: 'Days left',
+            ),
+            StatCard(
+              title: 'My Requests',
+              value: '${myLeaves.length}',
+              icon: Icons.event_note_rounded,
+              color: AppColors.primary,
+              subtitle: '$pendingCount pending',
+            ),
+            StatCard(
+              title: 'Performance',
+              value: employee.performanceScore.toStringAsFixed(1),
+              icon: Icons.star_rounded,
+              color: AppColors.warning,
+              subtitle: 'out of 5.0',
+            ),
+            StatCard(
+              title: 'Department',
+              value: employee.department.name.toUpperCase(),
+              icon: Icons.apartment_rounded,
+              color: AppColors.success,
+              subtitle: employee.contractLabel,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMyLeaveCard(BuildContext context, dynamic employee) {
+    final myLeaves = MockData.leaveRequests
+        .where((l) => l.employeeId == employee.id)
+        .take(3)
+        .toList();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: 'My Leave Requests',
+            actionLabel: 'View All',
+            onAction: () => context.go('/leave'),
+          ),
+          const SizedBox(height: 12),
+          if (myLeaves.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('No leave requests yet.',
+                    style: AppTextStyles.body2),
+              ),
+            )
+          else
+            ...myLeaves.map((l) {
+              final fmt = DateFormat('d MMM');
+              Color sc;
+              if (l.statusLabel == 'Approved') {
+                sc = AppColors.success;
+              } else if (l.statusLabel == 'Rejected') {
+                sc = AppColors.danger;
+              } else {
+                sc = AppColors.warning;
+              }
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Container(width: 6, height: 6,
+                        decoration: BoxDecoration(color: sc, shape: BoxShape.circle)),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(l.typeLabel, style: AppTextStyles.body2, overflow: TextOverflow.ellipsis)),
+                    Flexible(
+                      child: Text('${fmt.format(l.startDate)} – ${fmt.format(l.endDate)}',
+                          style: AppTextStyles.caption, overflow: TextOverflow.ellipsis),
+                    ),
+                    const SizedBox(width: 8),
+                    StatusBadge(label: l.statusLabel, color: sc,
+                        bgColor: sc.withValues(alpha: 0.1)),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context, bool isManager) {
+    final actions = [
+      _QuickAction(
+        icon: Icons.event_note_rounded,
+        label: 'Request\nLeave',
+        color: AppColors.accent,
+        onTap: () => context.go('/leave/new'),
+      ),
+      _QuickAction(
+        icon: Icons.access_time_rounded,
+        label: 'My\nAttendance',
+        color: AppColors.success,
+        onTap: () => context.go('/payroll'),
+      ),
+      if (isManager)
+        _QuickAction(
+          icon: Icons.people_alt_rounded,
+          label: 'Team\nDirectory',
+          color: AppColors.warning,
+          onTap: () => context.go('/employees'),
+        ),
+      _QuickAction(
+        icon: Icons.receipt_long_rounded,
+        label: 'My\nPayslip',
+        color: AppColors.pending,
+        onTap: () => context.go('/payroll'),
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Quick Actions', style: AppTextStyles.heading2),
+        const SizedBox(height: 12),
+        Row(
+          children: actions
+              .map((a) => Expanded(
+                    child: _QuickActionCard(action: a),
+                  ))
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatsGrid(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Overview',
+          actionLabel: 'View All',
+          onAction: () => context.go('/employees'),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
+          children: [
+            StatCard(
+              title: 'Total Employees',
+              value: '${MockData.employees.length}',
+              icon: Icons.people_rounded,
+              color: AppColors.primary,
+              subtitle: '+2 this month',
+            ),
+            StatCard(
+              title: 'Active Today',
+              value: '${MockData.activeCount}',
+              icon: Icons.check_circle_rounded,
+              color: AppColors.success,
+              subtitle: '${MockData.onLeaveCount} on leave',
+            ),
+            StatCard(
+              title: 'Pending Leaves',
+              value: '${MockData.pendingLeaveCount}',
+              icon: Icons.pending_actions_rounded,
+              color: AppColors.warning,
+              subtitle: 'Needs review',
+              onTap: () => context.go('/leave'),
+            ),
+            StatCard(
+              title: 'My Leave Balance',
+              value: '${MockData.currentEmployee.leaveBalance}d',
+              icon: Icons.beach_access_rounded,
+              color: AppColors.accent,
+              subtitle: 'Days remaining',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceCard(dynamic employee) {
+    final records = MockData.attendance;
+    final totalHours =
+        records.fold<double>(0, (sum, r) => sum + r.hoursWorked);
+    final avgHours = totalHours / records.length;
+    final lateCount = records.where((r) => r.isLate).length;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('This Week Attendance', style: AppTextStyles.heading2),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.successLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${records.length}/5 days',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.success, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _AttendanceStat(
+                label: 'Avg Hours/Day',
+                value: '${avgHours.toStringAsFixed(1)}h',
+                icon: Icons.access_time_rounded,
+                color: AppColors.accent,
+              ),
+              const SizedBox(width: 16),
+              _AttendanceStat(
+                label: 'Late Arrivals',
+                value: '$lateCount day${lateCount != 1 ? 's' : ''}',
+                icon: Icons.timer_off_rounded,
+                color: lateCount > 0 ? AppColors.warning : AppColors.success,
+              ),
+              const SizedBox(width: 16),
+              _AttendanceStat(
+                label: 'On Time Rate',
+                value:
+                    '${(((records.length - lateCount) / records.length) * 100).toInt()}%',
+                icon: Icons.thumb_up_rounded,
+                color: AppColors.success,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...records.take(3).map((r) {
+            final fmt = DateFormat('EEE, d MMM');
+            final timeFmt = DateFormat('HH:mm');
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: r.isLate ? AppColors.warning : AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(fmt.format(r.date),
+                        style: AppTextStyles.body2),
+                  ),
+                  if (r.checkIn != null)
+                    Text(
+                      '${timeFmt.format(r.checkIn!)} - ${r.checkOut != null ? timeFmt.format(r.checkOut!) : "--:--"}',
+                      style: AppTextStyles.body2
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${r.hoursWorked.toStringAsFixed(1)}h',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeadcountChart() {
+    final data = MockData.employeesByDepartment;
+    final colors = [
+      AppColors.primary,
+      AppColors.accent,
+      AppColors.success,
+      AppColors.warning,
+      AppColors.pending,
+      AppColors.danger,
+      const Color(0xFF00897B),
+    ];
+
+    final sections = data.entries.toList().asMap().entries.map((e) {
+      final count = e.value.value;
+      final color = colors[e.key % colors.length];
+      return PieChartSectionData(
+        value: count.toDouble(),
+        color: color,
+        radius: 60,
+        title: '$count',
+        titleStyle: AppTextStyles.body1.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+      );
+    }).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Headcount by Department', style: AppTextStyles.heading2),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 160,
+                height: 160,
+                child: PieChart(
+                  PieChartData(
+                    sections: sections,
+                    centerSpaceRadius: 32,
+                    sectionsSpace: 3,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  children: data.entries.toList().asMap().entries.map((e) {
+                    final dept = e.value.key;
+                    final count = e.value.value;
+                    final color = colors[e.key % colors.length];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _deptShort(dept),
+                              style: AppTextStyles.body2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '$count',
+                            style: AppTextStyles.body2.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _deptShort(Department dept) {
+    switch (dept) {
+      case Department.hr:
+        return 'HR';
+      case Department.it:
+        return 'IT';
+      case Department.finance:
+        return 'Finance';
+      case Department.marketing:
+        return 'Marketing';
+      case Department.operations:
+        return 'Operations';
+      case Department.sales:
+        return 'Sales';
+      case Department.legal:
+        return 'Legal';
+    }
+  }
+
+  Widget _buildPendingLeaveSection(BuildContext context) {
+    final pending = MockData.leaveRequests
+        .where((l) => l.status == LeaveStatus.pending)
+        .toList();
+
+    return Column(
+      children: [
+        SectionHeader(
+          title: 'Pending Approvals',
+          actionLabel: 'View All',
+          onAction: () => context.go('/leave'),
+        ),
+        const SizedBox(height: 12),
+        if (pending.isEmpty)
+          const EmptyState(
+            icon: Icons.check_circle_rounded,
+            title: 'All caught up!',
+            message: 'No pending leave requests.',
+          )
+        else
+          ...pending.map((l) => _PendingLeaveCard(request: l)),
+      ],
+    );
+  }
+
+  Widget _buildBirthdays() {
+    final upcoming = [
+      ('Fatima Zahra', 'IT', DateTime(2026, 6, 22), AppColors.accent),
+      ('Karim Mansouri', 'Finance', DateTime(2026, 6, 28), AppColors.success),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.08),
+            AppColors.accent.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryLighter),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.cake_rounded,
+                  color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              Text('Upcoming Birthdays', style: AppTextStyles.heading2),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...upcoming.map((b) {
+            final daysUntil = b.$3.difference(DateTime.now()).inDays;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  AvatarWidget(
+                    initials: b.$1.split(' ').map((s) => s[0]).join(),
+                    color: b.$4,
+                    size: 38,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(b.$1, style: AppTextStyles.body1),
+                        Text(b.$2, style: AppTextStyles.body2),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLighter,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      daysUntil == 0
+                          ? '🎂 Today!'
+                          : 'in $daysUntil days',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _QuickAction(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.onTap});
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final _QuickAction action;
+  const _QuickActionCard({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            color: action.color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+            border:
+                Border.all(color: action.color.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            children: [
+              Icon(action.icon, color: action.color, size: 26),
+              const SizedBox(height: 6),
+              Text(
+                action.label,
+                style: AppTextStyles.caption.copyWith(
+                  color: action.color,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _AttendanceStat(
+      {required this.label,
+      required this.value,
+      required this.icon,
+      required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(value,
+              style: AppTextStyles.body2
+                  .copyWith(fontWeight: FontWeight.w700, color: color, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center),
+          Text(label,
+              style: AppTextStyles.caption,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingLeaveCard extends StatefulWidget {
+  final dynamic request;
+  const _PendingLeaveCard({required this.request});
+
+  @override
+  State<_PendingLeaveCard> createState() => _PendingLeaveCardState();
+}
+
+class _PendingLeaveCardState extends State<_PendingLeaveCard> {
+  bool _approved = false;
+  bool _rejected = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = widget.request;
+    final fmt = DateFormat('d MMM');
+    if (_approved || _rejected) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          AvatarWidget(
+            initials: l.employeeName
+                .split(' ')
+                .map((s) => s[0])
+                .join()
+                .substring(0, 2),
+            color: AppColors.accent,
+            size: 40,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l.employeeName, style: AppTextStyles.body1),
+                Text(
+                  '${l.typeLabel} • ${fmt.format(l.startDate)} – ${fmt.format(l.endDate)} (${l.durationDays}d)',
+                  style: AppTextStyles.body2,
+                ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              _ActionBtn(
+                icon: Icons.close_rounded,
+                color: AppColors.danger,
+                onTap: () => setState(() => _rejected = true),
+              ),
+              const SizedBox(width: 6),
+              _ActionBtn(
+                icon: Icons.check_rounded,
+                color: AppColors.success,
+                onTap: () => setState(() => _approved = true),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionBtn(
+      {required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: color, size: 18),
+      ),
+    );
+  }
+}
