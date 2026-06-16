@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/data/mock_data.dart';
 import '../../core/models/employee.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/user_account.dart';
 import '../../core/services/auth_service.dart';
 import '../../shared/widgets/app_widgets.dart';
 
@@ -43,7 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                if (isManager) _buildRoleBanner(true) else _buildRoleBanner(false),
+                _buildRoleBanner(auth.currentAccount!.role),
                 const SizedBox(height: 16),
                 _buildQuickActions(context, isManager),
                 const SizedBox(height: 20),
@@ -190,7 +191,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRoleBanner(bool isManager) {
+  Widget _buildRoleBanner(UserRole role) {
+    final isManager = role == UserRole.hrManager || role == UserRole.manager;
+    final label = switch (role) {
+      UserRole.hrManager => 'Logged in as HR Manager — full access',
+      UserRole.manager => 'Logged in as Manager — team access',
+      UserRole.employee => 'Logged in as Employee — personal view',
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -214,9 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              isManager
-                  ? 'Logged in as HR Manager — full access'
-                  : 'Logged in as Employee — personal view',
+              label,
               style: AppTextStyles.body2.copyWith(
                 color: isManager ? AppColors.primary : AppColors.accent,
                 fontWeight: FontWeight.w600,
