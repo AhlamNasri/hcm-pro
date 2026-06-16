@@ -3,7 +3,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/services/app_backend.dart';
+import '../../core/services/auth_service.dart';
 import '../../shared/widgets/app_widgets.dart';
+
+const _reasonRequiredTypes = {
+  LeaveType.sick,
+  LeaveType.maternity,
+  LeaveType.paternity,
+  LeaveType.unpaid,
+};
 
 class LeaveRequestForm extends StatefulWidget {
   const LeaveRequestForm({super.key});
@@ -59,24 +68,44 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
     });
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message,
+            style: AppTextStyles.body2.copyWith(color: Colors.white)),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please select dates',
-              style: AppTextStyles.body2.copyWith(color: Colors.white)),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      _showError('Please select dates');
+      return;
+    }
+    if (_reasonRequiredTypes.contains(_selectedType) &&
+        _reasonController.text.trim().isEmpty) {
+      _showError('A reason is required for ${_selectedType.name} leave');
       return;
     }
     setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (mounted) {
-      setState(() => _isSubmitting = false);
+    try {
+      final employee = AuthService.instance.currentEmployee;
+      final request = LeaveRequest(
+        id: 'LR${DateTime.now().millisecondsSinceEpoch}',
+        employeeId: employee.id,
+        employeeName: employee.fullName,
+        type: _selectedType,
+        status: LeaveStatus.pending,
+        startDate: _startDate!,
+        endDate: _endDate!,
+        reason: _reasonController.text.trim(),
+        requestedAt: DateTime.now(),
+      );
+      await AppBackend.leaveRepository.create(request);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -99,6 +128,10 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
         ),
       );
       context.pop();
+    } catch (e) {
+      if (mounted) _showError('Could not submit request: $e');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 

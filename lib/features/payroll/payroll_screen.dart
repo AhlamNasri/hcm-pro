@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/data/mock_data.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/payslip_pdf_service.dart';
 import '../../core/models/payslip.dart';
 import '../../shared/widgets/app_widgets.dart';
 
@@ -263,8 +265,31 @@ class _PayrollScreenState extends State<PayrollScreen>
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _downloadPayslipPdf(p),
+              icon: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+              label: Text('Download Payslip PDF',
+                  style: AppTextStyles.button.copyWith(fontSize: 14)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.white54),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Future<void> _downloadPayslipPdf(Payslip payslip) async {
+    final employee = AuthService.instance.currentEmployee;
+    final bytes = await PayslipPdfService.build(payslip, employee);
+    await Printing.layoutPdf(
+      onLayout: (_) async => bytes,
+      name: 'Payslip_${payslip.monthName}_${payslip.year}.pdf',
     );
   }
 

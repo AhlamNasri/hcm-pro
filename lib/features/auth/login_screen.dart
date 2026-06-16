@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     await Future.delayed(const Duration(milliseconds: 900));
 
-    final error = AuthService.instance.login(email, password);
+    final error = await AuthService.instance.login(email, password);
 
     if (!mounted) return;
     setState(() => _isLoading = false);

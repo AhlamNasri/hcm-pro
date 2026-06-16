@@ -43,6 +43,39 @@ class Payslip {
   }
 
   String get period => '$monthName $year';
+
+  factory Payslip.fromFirestore(String id, Map<String, dynamic> data) {
+    return Payslip(
+      id: id,
+      employeeId: data['employeeId'] as String,
+      month: (data['month'] as num).toInt(),
+      year: (data['year'] as num).toInt(),
+      baseSalary: (data['baseSalary'] as num).toDouble(),
+      bonus: (data['bonus'] as num?)?.toDouble() ?? 0,
+      overtime: (data['overtime'] as num?)?.toDouble() ?? 0,
+      transportAllowance: (data['transportAllowance'] as num?)?.toDouble() ?? 0,
+      mealAllowance: (data['mealAllowance'] as num?)?.toDouble() ?? 0,
+      socialSecurity: (data['socialSecurity'] as num).toDouble(),
+      incomeTax: (data['incomeTax'] as num).toDouble(),
+      otherDeductions: (data['otherDeductions'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'employeeId': employeeId,
+      'month': month,
+      'year': year,
+      'baseSalary': baseSalary,
+      'bonus': bonus,
+      'overtime': overtime,
+      'transportAllowance': transportAllowance,
+      'mealAllowance': mealAllowance,
+      'socialSecurity': socialSecurity,
+      'incomeTax': incomeTax,
+      'otherDeductions': otherDeductions,
+    };
+  }
 }
 
 class AttendanceRecord {
@@ -65,4 +98,29 @@ class AttendanceRecord {
     this.isAbsent = false,
     this.isLate = false,
   });
+
+  factory AttendanceRecord.fromFirestore(String id, Map<String, dynamic> data) {
+    return AttendanceRecord(
+      id: id,
+      employeeId: data['employeeId'] as String,
+      date: DateTime.parse(data['date'] as String),
+      checkIn: data['checkIn'] != null ? DateTime.parse(data['checkIn'] as String) : null,
+      checkOut: data['checkOut'] != null ? DateTime.parse(data['checkOut'] as String) : null,
+      hoursWorked: (data['hoursWorked'] as num).toDouble(),
+      isAbsent: data['isAbsent'] as bool? ?? false,
+      isLate: data['isLate'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'employeeId': employeeId,
+      'date': date.toIso8601String(),
+      'checkIn': checkIn?.toIso8601String(),
+      'checkOut': checkOut?.toIso8601String(),
+      'hoursWorked': hoursWorked,
+      'isAbsent': isAbsent,
+      'isLate': isLate,
+    };
+  }
 }

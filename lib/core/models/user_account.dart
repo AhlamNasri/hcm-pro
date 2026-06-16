@@ -2,13 +2,13 @@ enum UserRole { hrManager, manager, employee }
 
 class UserAccount {
   final String email;
-  final String password;
+  final String? password;
   final String employeeId;
   final UserRole role;
 
   const UserAccount({
     required this.email,
-    required this.password,
+    this.password,
     required this.employeeId,
     required this.role,
   });

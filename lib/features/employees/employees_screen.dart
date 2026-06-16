@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/data/mock_data.dart';
 import '../../core/models/employee.dart';
+import '../../core/services/app_backend.dart';
 import '../../shared/widgets/app_widgets.dart';
+import 'add_employee_sheet.dart';
 
 class EmployeesScreen extends StatefulWidget {
   const EmployeesScreen({super.key});
@@ -19,6 +20,8 @@ class _EmployeesScreenState extends State<EmployeesScreen>
   EmployeeStatus? _selectedStatus;
   String _query = '';
   late TabController _tabController;
+  List<Employee> _employees = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -27,6 +30,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.toLowerCase());
     });
+    _loadEmployees();
   }
 
   @override
@@ -36,8 +40,17 @@ class _EmployeesScreenState extends State<EmployeesScreen>
     super.dispose();
   }
 
+  Future<void> _loadEmployees() async {
+    final employees = await AppBackend.employeeRepository.getAll();
+    if (!mounted) return;
+    setState(() {
+      _employees = employees;
+      _isLoading = false;
+    });
+  }
+
   List<Employee> get _filtered {
-    return MockData.employees.where((e) {
+    return _employees.where((e) {
       final matchesQuery = _query.isEmpty ||
           e.fullName.toLowerCase().contains(_query) ||
           e.email.toLowerCase().contains(_query) ||
@@ -77,7 +90,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                         style: AppTextStyles.heading1
                             .copyWith(color: Colors.white)),
                     Text(
-                      '${MockData.employees.length} employees',
+                      '${_employees.length} employees',
                       style: AppTextStyles.body2
                           .copyWith(color: Colors.white60),
                     ),
@@ -152,7 +165,11 @@ class _EmployeesScreenState extends State<EmployeesScreen>
               ),
             ),
             const SizedBox(height: 8),
-            if (_filtered.isEmpty)
+            if (_isLoading)
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_filtered.isEmpty)
               const Expanded(
                 child: EmptyState(
                   icon: Icons.search_off_rounded,
@@ -201,12 +218,17 @@ class _EmployeesScreenState extends State<EmployeesScreen>
     );
   }
 
-  void _showAddEmployee(BuildContext context) {
+  Future<void> _showAddEmployee(BuildContext context) async {
+    final employee = await showAddEmployeeSheet(context);
+    if (employee == null) return;
+    await AppBackend.employeeRepository.add(employee);
+    await _loadEmployees();
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Add employee feature coming soon',
+        content: Text('${employee.fullName} added',
             style: AppTextStyles.body2.copyWith(color: Colors.white)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

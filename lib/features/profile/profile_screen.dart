@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/models/employee.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/auth_service.dart';
 import '../../shared/widgets/app_widgets.dart';
+import 'profile_dialogs.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final employee = AuthService.instance.currentEmployee;
@@ -21,9 +28,9 @@ class ProfileScreen extends StatelessWidget {
               delegate: SliverChildListDelegate([
                 _buildStatsRow(employee),
                 const SizedBox(height: 16),
-                _buildMenuSection(context),
+                _buildMenuSection(context, employee),
                 const SizedBox(height: 16),
-                _buildAppInfo(),
+                _buildAppInfo(context),
                 const SizedBox(height: 16),
                 _buildSignOut(context),
                 const SizedBox(height: 40),
@@ -35,7 +42,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, dynamic employee) {
+  Widget _buildHeader(BuildContext context, Employee employee) {
     return SliverAppBar(
       expandedHeight: 250,
       pinned: true,
@@ -111,7 +118,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsRow(dynamic employee) {
+  Widget _buildStatsRow(Employee employee) {
     final yearsAtCompany =
         DateTime.now().difference(employee.hireDate).inDays ~/ 365;
 
@@ -148,21 +155,24 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuSection(BuildContext context) {
+  Widget _buildMenuSection(BuildContext context, Employee employee) {
     final items = [
       _MenuItem(
         icon: Icons.person_outline_rounded,
         label: 'Personal Information',
         subtitle: 'View & edit your details',
         color: AppColors.primary,
-        onTap: () {},
+        onTap: () async {
+          final changed = await showPersonalInfoSheet(context, employee);
+          if (changed && mounted) setState(() {});
+        },
       ),
       _MenuItem(
         icon: Icons.lock_outline_rounded,
         label: 'Security',
         subtitle: 'Password, 2FA',
         color: AppColors.accent,
-        onTap: () {},
+        onTap: () => showSecurityDialog(context),
       ),
       _MenuItem(
         icon: Icons.notifications_outlined,
@@ -176,14 +186,14 @@ class ProfileScreen extends StatelessWidget {
         label: 'Language',
         subtitle: 'English (EN)',
         color: AppColors.success,
-        onTap: () {},
+        onTap: () => showLanguageDialog(context),
       ),
       _MenuItem(
         icon: Icons.help_outline_rounded,
         label: 'Help & Support',
         subtitle: 'FAQs, contact us',
         color: AppColors.pending,
-        onTap: () {},
+        onTap: () => showHelpSupportSheet(context),
       ),
     ];
 
@@ -250,7 +260,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAppInfo() {
+  Widget _buildAppInfo(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -286,7 +296,7 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () {},
+            onPressed: () => showWhatsNewDialog(context),
             child: Text(
               'What\'s new',
               style: AppTextStyles.body2.copyWith(

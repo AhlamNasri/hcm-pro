@@ -58,4 +58,33 @@ class LeaveRequest {
         return 'Cancelled';
     }
   }
+
+  factory LeaveRequest.fromFirestore(String id, Map<String, dynamic> data) {
+    return LeaveRequest(
+      id: id,
+      employeeId: data['employeeId'] as String,
+      employeeName: data['employeeName'] as String,
+      type: LeaveType.values.byName(data['type'] as String),
+      status: LeaveStatus.values.byName(data['status'] as String),
+      startDate: DateTime.parse(data['startDate'] as String),
+      endDate: DateTime.parse(data['endDate'] as String),
+      reason: data['reason'] as String,
+      requestedAt: DateTime.parse(data['requestedAt'] as String),
+      approvedBy: data['approvedBy'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'type': type.name,
+      'status': status.name,
+      'startDate': startDate.toIso8601String(),
+      'endDate': endDate.toIso8601String(),
+      'reason': reason,
+      'requestedAt': requestedAt.toIso8601String(),
+      'approvedBy': approvedBy,
+    };
+  }
 }

@@ -229,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMyStatsGrid(BuildContext context, dynamic employee) {
+  Widget _buildMyStatsGrid(BuildContext context, Employee employee) {
     final myLeaves = MockData.leaveRequests
         .where((l) => l.employeeId == employee.id)
         .toList();
@@ -283,7 +283,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMyLeaveCard(BuildContext context, dynamic employee) {
+  Widget _buildMyLeaveCard(BuildContext context, Employee employee) {
     final myLeaves = MockData.leaveRequests
         .where((l) => l.employeeId == employee.id)
         .take(3)
@@ -445,7 +445,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAttendanceCard(dynamic employee) {
+  Widget _buildAttendanceCard(Employee employee) {
     final records = MockData.attendance;
     final totalHours =
         records.fold<double>(0, (sum, r) => sum + r.hoursWorked);
@@ -871,7 +871,7 @@ class _AttendanceStat extends StatelessWidget {
 }
 
 class _PendingLeaveCard extends StatefulWidget {
-  final dynamic request;
+  final LeaveRequest request;
   const _PendingLeaveCard({required this.request});
 
   @override

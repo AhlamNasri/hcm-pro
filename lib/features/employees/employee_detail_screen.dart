@@ -1,21 +1,152 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/data/mock_data.dart';
 import '../../core/models/employee.dart';
+import '../../core/models/leave_request.dart';
+import '../../core/services/app_backend.dart';
 import '../../shared/widgets/app_widgets.dart';
+import 'add_employee_sheet.dart';
 
-class EmployeeDetailScreen extends StatelessWidget {
+class EmployeeDetailScreen extends StatefulWidget {
   final String employeeId;
   const EmployeeDetailScreen({super.key, required this.employeeId});
 
   @override
-  Widget build(BuildContext context) {
-    final employee = MockData.employees.firstWhere(
-      (e) => e.id == employeeId,
-      orElse: () => MockData.employees.first,
+  State<EmployeeDetailScreen> createState() => _EmployeeDetailScreenState();
+}
+
+class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
+  Employee? _employee;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final employee = await AppBackend.employeeRepository.getById(widget.employeeId);
+    if (!mounted) return;
+    setState(() {
+      _employee = employee;
+      _isLoading = false;
+    });
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: AppTextStyles.body2.copyWith(color: Colors.white)),
+        backgroundColor: isError ? AppColors.danger : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
+  }
+
+  void _showMessageDialog(Employee employee) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Contact ${employee.firstName}', style: AppTextStyles.heading2),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ContactRow(icon: Icons.email_outlined, value: employee.email),
+            const SizedBox(height: 10),
+            _ContactRow(icon: Icons.phone_outlined, value: employee.phone),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Close', style: AppTextStyles.body1.copyWith(color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showMoreMenu(Employee employee) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: AppColors.primary),
+              title: Text('Edit Employee', style: AppTextStyles.body1),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: Icon(
+                employee.status == EmployeeStatus.inactive
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.block_rounded,
+                color: employee.status == EmployeeStatus.inactive
+                    ? AppColors.success
+                    : AppColors.danger,
+              ),
+              title: Text(
+                employee.status == EmployeeStatus.inactive
+                    ? 'Activate Employee'
+                    : 'Deactivate Employee',
+                style: AppTextStyles.body1,
+              ),
+              onTap: () => Navigator.pop(ctx, 'toggle'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (action == 'edit') {
+      final updated = await showEditEmployeeSheet(context, employee);
+      if (updated != null) {
+        await AppBackend.employeeRepository.update(updated);
+        await _load();
+        if (mounted) _showSnack('Employee updated');
+      }
+    } else if (action == 'toggle') {
+      final newStatus = employee.status == EmployeeStatus.inactive
+          ? EmployeeStatus.active
+          : EmployeeStatus.inactive;
+      await AppBackend.employeeRepository.update(employee.copyWith(status: newStatus));
+      await _load();
+      if (mounted) {
+        _showSnack(newStatus == EmployeeStatus.active
+            ? 'Employee activated'
+            : 'Employee deactivated');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final employee = _employee;
+    if (employee == null) {
+      return Scaffold(
+        appBar: HCMAppBar(title: 'Employee', showBackButton: true),
+        body: const EmptyState(
+          icon: Icons.person_off_rounded,
+          title: 'Employee not found',
+          message: 'This employee record could not be loaded.',
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -40,7 +171,7 @@ class EmployeeDetailScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
+        onPressed: () => _showMessageDialog(employee),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.message_rounded, color: Colors.white),
         label: Text('Message',
@@ -62,7 +193,7 @@ class EmployeeDetailScreen extends StatelessWidget {
       actions: [
         IconButton(
           icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-          onPressed: () {},
+          onPressed: () => _showMoreMenu(employee),
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -243,10 +374,16 @@ class EmployeeDetailScreen extends StatelessWidget {
   }
 
   Widget _buildLeaveCard(Employee employee) {
-    final leaves = MockData.leaveRequests
-        .where((l) => l.employeeId == employee.id)
-        .toList();
+    return StreamBuilder<List<LeaveRequest>>(
+      stream: AppBackend.leaveRepository.streamForEmployee(employee.id),
+      builder: (context, snapshot) {
+        final leaves = snapshot.data ?? const <LeaveRequest>[];
+        return _buildLeaveCardContent(employee, leaves);
+      },
+    );
+  }
 
+  Widget _buildLeaveCardContent(Employee employee, List<LeaveRequest> leaves) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -461,6 +598,38 @@ class _StatusChip extends StatelessWidget {
             color: color,
             fontWeight: FontWeight.w700,
           )),
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  const _ContactRow({required this.icon, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.textSecondary),
+        const SizedBox(width: 10),
+        Expanded(child: Text(value, style: AppTextStyles.body1)),
+        IconButton(
+          icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.primary),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: value));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Copied to clipboard',
+                    style: AppTextStyles.body2.copyWith(color: Colors.white)),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

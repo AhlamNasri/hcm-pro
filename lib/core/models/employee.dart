@@ -67,6 +67,35 @@ class Employee {
     }
   }
 
+  Employee copyWith({
+    String? firstName,
+    String? lastName,
+    String? email,
+    String? phone,
+    String? position,
+    EmployeeStatus? status,
+    int? leaveBalance,
+    double? performanceScore,
+  }) {
+    return Employee(
+      id: id,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      position: position ?? this.position,
+      department: department,
+      status: status ?? this.status,
+      contractType: contractType,
+      hireDate: hireDate,
+      salary: salary,
+      managerId: managerId,
+      avatarColor: avatarColor,
+      leaveBalance: leaveBalance ?? this.leaveBalance,
+      performanceScore: performanceScore ?? this.performanceScore,
+    );
+  }
+
   String get contractLabel {
     switch (contractType) {
       case ContractType.cdi:
@@ -78,5 +107,44 @@ class Employee {
       case ContractType.freelance:
         return 'Freelance';
     }
+  }
+
+  factory Employee.fromFirestore(String id, Map<String, dynamic> data) {
+    return Employee(
+      id: id,
+      firstName: data['firstName'] as String,
+      lastName: data['lastName'] as String,
+      email: data['email'] as String,
+      phone: data['phone'] as String,
+      position: data['position'] as String,
+      department: Department.values.byName(data['department'] as String),
+      status: EmployeeStatus.values.byName(data['status'] as String),
+      contractType: ContractType.values.byName(data['contractType'] as String),
+      hireDate: DateTime.parse(data['hireDate'] as String),
+      salary: (data['salary'] as num).toDouble(),
+      managerId: data['managerId'] as String? ?? '',
+      avatarColor: data['avatarColor'] as String,
+      leaveBalance: (data['leaveBalance'] as num).toInt(),
+      performanceScore: (data['performanceScore'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': email,
+      'phone': phone,
+      'position': position,
+      'department': department.name,
+      'status': status.name,
+      'contractType': contractType.name,
+      'hireDate': hireDate.toIso8601String(),
+      'salary': salary,
+      'managerId': managerId,
+      'avatarColor': avatarColor,
+      'leaveBalance': leaveBalance,
+      'performanceScore': performanceScore,
+    };
   }
 }

@@ -10,9 +10,33 @@ import '../../features/leave/leave_request_form.dart';
 import '../../features/payroll/payroll_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
+import '../services/auth_service.dart';
+
+// Routes only the HR manager / line managers may reach. Plain employees get
+// bounced back to the dashboard if they try to deep-link into one of these.
+const _managerOnlyPaths = ['/employees'];
+
+String? _routeGuard(BuildContext context, GoRouterState state) {
+  final loggedIn = AuthService.instance.isLoggedIn;
+  final goingToLogin = state.matchedLocation == '/login';
+
+  if (!loggedIn) {
+    return goingToLogin ? null : '/login';
+  }
+  if (goingToLogin) {
+    return '/dashboard';
+  }
+  final isManager = AuthService.instance.isManager;
+  if (!isManager &&
+      _managerOnlyPaths.any((p) => state.matchedLocation.startsWith(p))) {
+    return '/dashboard';
+  }
+  return null;
+}
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/login',
+  redirect: _routeGuard,
   routes: [
     GoRoute(
       path: '/login',
