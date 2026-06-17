@@ -1,10 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/auth_service.dart';
-import '../../shared/widgets/app_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,44 +11,53 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _buttonPressed = false;
   String? _errorMsg;
-  late AnimationController _animCtrl;
-  late Animation<double> _heroFadeAnim;
-  late Animation<double> _cardFadeAnim;
-  late Animation<Offset> _slideAnim;
+
+  late AnimationController _entranceCtrl;
+  late Animation<double> _illustrationFadeAnim;
+  late Animation<double> _formFadeAnim;
+  late Animation<Offset> _formSlideAnim;
+
+  // A slow, perpetual idle bob for the illustration — the screen should
+  // feel alive even before anyone touches it.
+  late AnimationController _floatCtrl;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
+    _entranceCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1100));
-    // Staggered entrance: the hero mark/title settle first, then the card
-    // slides in — a small choreographed touch instead of everything
-    // fading in at once.
-    _heroFadeAnim = CurvedAnimation(
-      parent: _animCtrl,
-      curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
+    _illustrationFadeAnim = CurvedAnimation(
+      parent: _entranceCtrl,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     );
-    _cardFadeAnim = CurvedAnimation(
-      parent: _animCtrl,
+    _formFadeAnim = CurvedAnimation(
+      parent: _entranceCtrl,
       curve: const Interval(0.35, 1.0, curve: Curves.easeOut),
     );
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+    _formSlideAnim = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
         .animate(CurvedAnimation(
-      parent: _animCtrl,
+      parent: _entranceCtrl,
       curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
     ));
-    _animCtrl.forward();
+    _entranceCtrl.forward();
+
+    _floatCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _animCtrl.dispose();
+    _entranceCtrl.dispose();
+    _floatCtrl.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -87,138 +93,138 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final illustrationHeight = (screenHeight * 0.36).clamp(260.0, 340.0);
+
     return Scaffold(
-      backgroundColor: AppColors.primaryDark,
-      body: Stack(
-        children: [
-          Container(color: AppColors.primaryDark),
-          AnimatedBlobAccentBackdrop(color: AppColors.primary),
-          SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                const SizedBox(height: 36),
-                FadeTransition(
-                  opacity: _heroFadeAnim,
-                  child: Column(
+      backgroundColor: AppColors.surface,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FadeTransition(
+              opacity: _illustrationFadeAnim,
+              child: ClipPath(
+                clipper: _CurvedBottomClipper(),
+                child: Container(
+                  height: illustrationHeight,
+                  width: double.infinity,
+                  color: AppColors.primaryDark,
+                  child: Stack(
                     children: [
-                      Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.35),
-                              width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const CustomPaint(
-                          size: Size(84, 84),
-                          painter: _LogoMarkPainter(),
+                      Positioned.fill(
+                        child: CustomPaint(painter: _IllustrationBackdropPainter()),
+                      ),
+                      SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                          child: Row(
+                            children: [
+                              Text('HCM Pro',
+                                  style: AppTextStyles.heading2.copyWith(
+                                    color: Colors.white,
+                                    letterSpacing: 0.3,
+                                  )),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text('Workforce Platform',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: Colors.white.withValues(alpha: 0.85),
+                                    )),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      Text('WORKFORCE PLATFORM',
-                          style: AppTextStyles.label.copyWith(
-                            color: Colors.white.withValues(alpha: 0.65),
-                            letterSpacing: 2.4,
-                          )),
-                      const SizedBox(height: 6),
-                      Text('HCM Pro',
-                          style: AppTextStyles.displayLarge.copyWith(
-                            color: Colors.white,
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                          )),
-                      const SizedBox(height: 6),
-                      Text('Manage your people, beautifully.',
-                          style: AppTextStyles.body1.copyWith(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontStyle: FontStyle.italic,
-                          )),
+                      Positioned.fill(
+                        child: AnimatedBuilder(
+                          animation: _floatCtrl,
+                          builder: (context, child) {
+                            final dy = -6 + 12 * _floatCtrl.value;
+                            return Transform.translate(
+                              offset: Offset(0, dy),
+                              child: child,
+                            );
+                          },
+                          child: CustomPaint(
+                            painter: _HeroBadgePainter(),
+                            size: Size.infinite,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                SlideTransition(
-                  position: _slideAnim,
-                  child: FadeTransition(
-                    opacity: _cardFadeAnim,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(26),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                        child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.94),
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.6)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.18),
-                            blurRadius: 36,
-                            offset: const Offset(0, 14),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: SlideTransition(
+                position: _formSlideAnim,
+                child: FadeTransition(
+                  opacity: _formFadeAnim,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Welcome back', style: AppTextStyles.displayLarge),
+                      const SizedBox(height: 4),
+                      Text('Sign in to get back to your team.',
+                          style: AppTextStyles.body1.copyWith(
+                            color: AppColors.textSecondary,
+                          )),
+                      const SizedBox(height: 28),
+                      _buildEmailField(),
+                      const SizedBox(height: 14),
+                      _buildPasswordField(),
+                      if (_errorMsg != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.dangerLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: AppColors.danger.withValues(alpha: 0.3)),
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Welcome back', style: AppTextStyles.heading1),
-                          const SizedBox(height: 4),
-                          Text('Sign in to your account',
-                              style: AppTextStyles.body2),
-                          const SizedBox(height: 24),
-                          _buildEmailField(),
-                          const SizedBox(height: 14),
-                          _buildPasswordField(),
-                          if (_errorMsg != null) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: AppColors.dangerLight,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: AppColors.danger
-                                        .withValues(alpha: 0.3)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline_rounded,
+                                  color: AppColors.danger, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(_errorMsg!,
+                                    style: AppTextStyles.body2
+                                        .copyWith(color: AppColors.danger)),
                               ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.error_outline_rounded,
-                                      color: AppColors.danger, size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(_errorMsg!,
-                                        style: AppTextStyles.body2.copyWith(
-                                            color: AppColors.danger)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                          SizedBox(
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      GestureDetector(
+                        onTapDown: (_) => setState(() => _buttonPressed = true),
+                        onTapUp: (_) => setState(() => _buttonPressed = false),
+                        onTapCancel: () => setState(() => _buttonPressed = false),
+                        child: AnimatedScale(
+                          scale: _buttonPressed ? 0.97 : 1.0,
+                          duration: const Duration(milliseconds: 100),
+                          child: SizedBox(
                             width: double.infinity,
-                            height: 52,
+                            height: 54,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _login,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14)),
+                                    borderRadius: BorderRadius.circular(16)),
                                 elevation: 0,
                               ),
                               child: _isLoading
@@ -226,8 +232,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       width: 22,
                                       height: 22,
                                       child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5),
+                                          color: Colors.white, strokeWidth: 2.5),
                                     )
                                   : Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
@@ -242,25 +247,22 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                             ),
                           ),
-                        ],
-                      ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 28),
+                      Center(
+                        child: Text(
+                          '© 2026 HCM Pro. All rights reserved.',
+                          style: AppTextStyles.caption,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  '© 2026 HCM Pro. All rights reserved.',
-                  style: AppTextStyles.caption
-                      .copyWith(color: Colors.white.withValues(alpha: 0.5)),
-                ),
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-        ],
       ),
     );
   }
@@ -320,28 +322,113 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-/// Two overlapping rounded squares — a small bespoke mark instead of a
-/// stock Material icon, echoing the overlapping-circle motif used in
-/// [BlobAccentBackdrop] elsewhere in the app.
-class _LogoMarkPainter extends CustomPainter {
-  const _LogoMarkPainter();
-
+/// The illustration panel's bottom edge curves gently into the page
+/// instead of cutting straight across — the single biggest lever for
+/// "not the generic template" composition.
+class _CurvedBottomClipper extends CustomClipper<Path> {
   @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final back = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.22, h * 0.18, w * 0.46, h * 0.46),
-      Radius.circular(w * 0.12),
-    );
-    final front = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.32, h * 0.36, w * 0.46, h * 0.46),
-      Radius.circular(w * 0.12),
-    );
-    canvas.drawRRect(back, Paint()..color = Colors.white.withValues(alpha: 0.55));
-    canvas.drawRRect(front, Paint()..color = Colors.white);
+  Path getClip(Size size) {
+    final path = Path()
+      ..lineTo(0, size.height - 36)
+      ..quadraticBezierTo(
+          size.width * 0.5, size.height + 28, size.width, size.height - 36)
+      ..lineTo(size.width, 0)
+      ..close();
+    return path;
   }
 
   @override
-  bool shouldRepaint(covariant _LogoMarkPainter oldDelegate) => false;
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
+/// Soft layered circles behind the hero badge.
+class _IllustrationBackdropPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawCircle(Offset(size.width * 0.85, size.height * 0.15),
+        size.width * 0.4, Paint()..color = AppColors.primary.withValues(alpha: 0.5));
+    canvas.drawCircle(Offset(size.width * 0.1, size.height * 0.85),
+        size.width * 0.3, Paint()..color = AppColors.primary.withValues(alpha: 0.35));
+  }
+
+  @override
+  bool shouldRepaint(covariant _IllustrationBackdropPainter oldDelegate) => false;
+}
+
+/// A single hero shape — an "approved" clipboard badge — instead of a
+/// cluttered scene. Sized and centered using its own width (not an
+/// eyeballed offset) and kept with a large safety margin above the
+/// curved bottom edge so it can never be clipped.
+class _HeroBadgePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width * 0.5;
+    const boardW = 118.0;
+    const boardH = 148.0;
+    // Must clear the "HCM Pro" / "Workforce Platform" header row above it.
+    final top = size.height * 0.27;
+    final left = cx - boardW / 2;
+
+    // Soft shadow.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+          Rect.fromLTWH(left + 6, top + 12, boardW, boardH), const Radius.circular(20)),
+      Paint()..color = Colors.black.withValues(alpha: 0.12),
+    );
+
+    // Board.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+          Rect.fromLTWH(left, top, boardW, boardH), const Radius.circular(20)),
+      Paint()..color = Colors.white,
+    );
+
+    // Clip at the top.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+          Rect.fromLTWH(cx - boardW * 0.18, top - 12, boardW * 0.36, 24),
+          const Radius.circular(7)),
+      Paint()..color = AppColors.roleHrManager,
+    );
+
+    // Big checkmark in a circle — the headline moment.
+    final circleCenter = Offset(cx, top + boardH * 0.36);
+    canvas.drawCircle(circleCenter, 32,
+        Paint()..color = AppColors.success.withValues(alpha: 0.16));
+    final checkPaint = Paint()
+      ..color = AppColors.success
+      ..strokeWidth = 6
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(
+      Path()
+        ..moveTo(circleCenter.dx - 14, circleCenter.dy)
+        ..lineTo(circleCenter.dx - 3, circleCenter.dy + 12)
+        ..lineTo(circleCenter.dx + 16, circleCenter.dy - 13),
+      checkPaint,
+    );
+
+    // Lines of "text" below the checkmark.
+    final linePaint = Paint()
+      ..color = AppColors.divider
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 3; i++) {
+      final y = top + boardH * 0.64 + i * 24;
+      canvas.drawLine(
+          Offset(left + boardW * 0.16, y), Offset(left + boardW * 0.84, y), linePaint);
+    }
+
+    // Floating accent dots, kept well clear of the bottom edge.
+    canvas.drawCircle(Offset(left - 36, top + 8), 7,
+        Paint()..color = AppColors.roleEmployee.withValues(alpha: 0.85));
+    canvas.drawCircle(Offset(left + boardW + 34, top + boardH * 0.3), 5,
+        Paint()..color = Colors.white.withValues(alpha: 0.7));
+    canvas.drawCircle(Offset(left - 20, top + boardH * 0.75), 5,
+        Paint()..color = AppColors.roleManager.withValues(alpha: 0.8));
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeroBadgePainter oldDelegate) => false;
 }
