@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
@@ -19,17 +21,31 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   String? _errorMsg;
   late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
+  late Animation<double> _heroFadeAnim;
+  late Animation<double> _cardFadeAnim;
   late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+        vsync: this, duration: const Duration(milliseconds: 1100));
+    // Staggered entrance: the hero mark/title settle first, then the card
+    // slides in — a small choreographed touch instead of everything
+    // fading in at once.
+    _heroFadeAnim = CurvedAnimation(
+      parent: _animCtrl,
+      curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
+    );
+    _cardFadeAnim = CurvedAnimation(
+      parent: _animCtrl,
+      curve: const Interval(0.35, 1.0, curve: Curves.easeOut),
+    );
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(
+      parent: _animCtrl,
+      curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
+    ));
     _animCtrl.forward();
   }
 
@@ -82,54 +98,77 @@ class _LoginScreenState extends State<LoginScreen>
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
-                const SizedBox(height: 40),
+                const SizedBox(height: 36),
                 FadeTransition(
-                  opacity: _fadeAnim,
+                  opacity: _heroFadeAnim,
                   child: Column(
                     children: [
                       Container(
-                        width: 80,
-                        height: 80,
+                        width: 84,
+                        height: 84,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(22),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
+                              color: Colors.white.withValues(alpha: 0.35),
                               width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child: const Icon(Icons.business_center_rounded,
-                            color: Colors.white, size: 40),
+                        child: const CustomPaint(
+                          size: Size(84, 84),
+                          painter: _LogoMarkPainter(),
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
+                      Text('WORKFORCE PLATFORM',
+                          style: AppTextStyles.label.copyWith(
+                            color: Colors.white.withValues(alpha: 0.65),
+                            letterSpacing: 2.4,
+                          )),
+                      const SizedBox(height: 6),
                       Text('HCM Pro',
                           style: AppTextStyles.displayLarge.copyWith(
                             color: Colors.white,
+                            fontSize: 34,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.3,
                           )),
-                      const SizedBox(height: 4),
-                      Text('Human Capital Management',
+                      const SizedBox(height: 6),
+                      Text('Manage your people, beautifully.',
                           style: AppTextStyles.body1.copyWith(
-                            color: Colors.white.withValues(alpha: 0.8),
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontStyle: FontStyle.italic,
                           )),
                     ],
                   ),
                 ),
-                const SizedBox(height: 36),
+                const SizedBox(height: 32),
                 SlideTransition(
                   position: _slideAnim,
                   child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Container(
+                    opacity: _cardFadeAnim,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(26),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
+                        color: Colors.white.withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.6)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 30,
-                            offset: const Offset(0, 10),
+                            color: Colors.black.withValues(alpha: 0.18),
+                            blurRadius: 36,
+                            offset: const Offset(0, 14),
                           ),
                         ],
                       ),
@@ -190,12 +229,22 @@ class _LoginScreenState extends State<LoginScreen>
                                           color: Colors.white,
                                           strokeWidth: 2.5),
                                     )
-                                  : Text('Sign In',
-                                      style: AppTextStyles.button
-                                          .copyWith(fontSize: 16)),
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text('Sign In',
+                                            style: AppTextStyles.button
+                                                .copyWith(fontSize: 16)),
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.arrow_forward_rounded,
+                                            color: Colors.white, size: 18),
+                                      ],
+                                    ),
                             ),
                           ),
                         ],
+                      ),
+                        ),
                       ),
                     ),
                   ),
@@ -269,4 +318,30 @@ class _LoginScreenState extends State<LoginScreen>
       ],
     );
   }
+}
+
+/// Two overlapping rounded squares — a small bespoke mark instead of a
+/// stock Material icon, echoing the overlapping-circle motif used in
+/// [BlobAccentBackdrop] elsewhere in the app.
+class _LogoMarkPainter extends CustomPainter {
+  const _LogoMarkPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final back = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.22, h * 0.18, w * 0.46, h * 0.46),
+      Radius.circular(w * 0.12),
+    );
+    final front = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.32, h * 0.36, w * 0.46, h * 0.46),
+      Radius.circular(w * 0.12),
+    );
+    canvas.drawRRect(back, Paint()..color = Colors.white.withValues(alpha: 0.55));
+    canvas.drawRRect(front, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LogoMarkPainter oldDelegate) => false;
 }
