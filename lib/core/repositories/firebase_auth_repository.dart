@@ -46,31 +46,45 @@ class FirebaseAuthRepository implements AuthRepository {
       );
       final uid = credential.user?.uid;
       if (uid == null) return 'Login failed.';
-
-      final userDoc = await _firestore.collection('users').doc(uid).get();
-      if (!userDoc.exists) {
-        return 'No HCM profile found for this account.';
-      }
-      final userData = userDoc.data()!;
-      final employeeId = userData['employeeId'] as String;
-      final role = UserRole.values.byName(userData['role'] as String);
-
-      final employeeDoc =
-          await _firestore.collection('employees').doc(employeeId).get();
-      if (!employeeDoc.exists) {
-        return 'Employee record not found for this account.';
-      }
-
-      _currentEmployee = Employee.fromFirestore(employeeId, employeeDoc.data()!);
-      _currentAccount = UserAccount(
-        email: email.trim(),
-        employeeId: employeeId,
-        role: role,
-      );
-      return null;
+      return _loadSessionForUid(uid, fallbackEmail: email.trim());
     } on fb.FirebaseAuthException catch (e) {
       return e.message ?? 'Login failed.';
     }
+  }
+
+  /// Loads the `users`/`employees` docs for [uid] into [_currentAccount]/
+  /// [_currentEmployee]. Returns null on success, an error message
+  /// otherwise. Shared by [login] and [restoreSession].
+  Future<String?> _loadSessionForUid(String uid, {required String fallbackEmail}) async {
+    final userDoc = await _firestore.collection('users').doc(uid).get();
+    if (!userDoc.exists) {
+      return 'No HCM profile found for this account.';
+    }
+    final userData = userDoc.data()!;
+    final employeeId = userData['employeeId'] as String;
+    final role = UserRole.values.byName(userData['role'] as String);
+
+    final employeeDoc =
+        await _firestore.collection('employees').doc(employeeId).get();
+    if (!employeeDoc.exists) {
+      return 'Employee record not found for this account.';
+    }
+
+    _currentEmployee = Employee.fromFirestore(employeeId, employeeDoc.data()!);
+    _currentAccount = UserAccount(
+      email: (userData['email'] as String?) ?? fallbackEmail,
+      employeeId: employeeId,
+      role: role,
+    );
+    return null;
+  }
+
+  @override
+  Future<bool> restoreSession() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    final error = await _loadSessionForUid(user.uid, fallbackEmail: user.email ?? '');
+    return error == null;
   }
 
   @override
@@ -121,6 +135,7 @@ class FirebaseAuthRepository implements AuthRepository {
       final uid = credential.user!.uid;
       await secondaryAuth.signOut();
       await _firestore.collection('users').doc(uid).set({
+        'email': email.trim(),
         'employeeId': employeeId,
         'role': UserRole.employee.name,
       });
@@ -130,6 +145,17 @@ class FirebaseAuthRepository implements AuthRepository {
     } finally {
       await secondaryApp.delete();
     }
+  }
+
+  @override
+  Future<String?> findOwnerEmployeeId() async {
+    final snapshot = await _firestore
+        .collection('users')
+        .where('role', isEqualTo: UserRole.owner.name)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) return null;
+    return snapshot.docs.first.data()['employeeId'] as String?;
   }
 
   static String _generateTempPassword() {

@@ -26,4 +26,14 @@ abstract class AuthRepository {
     required String employeeId,
     required String email,
   });
+
+  /// Employee id of the org's Owner — the fallback approver for anyone
+  /// with no manager on record (see [LeaveApprovalPolicy]). Null if no
+  /// Owner account exists.
+  Future<String?> findOwnerEmployeeId();
+
+  /// Restores a previously logged-in session (e.g. after the app was
+  /// fully closed and reopened), so the user doesn't have to log in
+  /// again every launch. Returns true if a session was restored.
+  Future<bool> restoreSession();
 }

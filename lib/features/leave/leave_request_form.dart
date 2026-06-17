@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/notification_item.dart';
 import '../../core/models/user_account.dart';
 import '../../core/services/app_backend.dart';
 import '../../core/services/auth_service.dart';
@@ -116,6 +117,22 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
         final newBalance = employee.leaveBalance - request.durationDays;
         await AppBackend.employeeRepository.update(
             employee.copyWith(leaveBalance: newBalance < 0 ? 0 : newBalance));
+      } else {
+        final approverId = employee.managerId.isNotEmpty
+            ? employee.managerId
+            : await AppBackend.authRepository.findOwnerEmployeeId();
+        if (approverId != null) {
+          await AppBackend.notificationRepository.create(NotificationItem(
+            id: 'NTF${DateTime.now().microsecondsSinceEpoch}',
+            userId: approverId,
+            title: 'New Leave Request',
+            body: '${employee.fullName} requested ${request.durationDays} '
+                'day${request.durationDays == 1 ? '' : 's'} of '
+                '${request.typeLabel.toLowerCase()}.',
+            type: NotificationType.leavePending,
+            createdAt: DateTime.now(),
+          ));
+        }
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

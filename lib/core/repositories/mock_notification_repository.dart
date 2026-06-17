@@ -48,6 +48,12 @@ class MockNotificationRepository implements NotificationRepository {
   }
 
   @override
+  Future<void> create(NotificationItem notification) async {
+    _items.add(notification);
+    _changes.add(null);
+  }
+
+  @override
   Future<void> markRead(String id) async {
     final index = _items.indexWhere((n) => n.id == id);
     if (index == -1) return;

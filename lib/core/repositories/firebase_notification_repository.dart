@@ -22,6 +22,11 @@ class FirebaseNotificationRepository implements NotificationRepository {
   }
 
   @override
+  Future<void> create(NotificationItem notification) async {
+    await _collection.doc(notification.id).set(notification.toFirestore());
+  }
+
+  @override
   Future<void> markRead(String id) async {
     await _collection.doc(id).update({'isRead': true});
   }

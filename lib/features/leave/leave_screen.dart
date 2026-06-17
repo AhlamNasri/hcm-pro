@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/employee.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/notification_item.dart';
 import '../../core/models/user_account.dart';
 import '../../core/services/app_backend.dart';
 import '../../core/services/auth_service.dart';
@@ -79,6 +80,14 @@ class _LeaveScreenState extends State<LeaveScreen>
       await AppBackend.employeeRepository
           .update(employee.copyWith(leaveBalance: newBalance < 0 ? 0 : newBalance));
     }
+    await AppBackend.notificationRepository.create(NotificationItem(
+      id: 'NTF${DateTime.now().microsecondsSinceEpoch}',
+      userId: request.employeeId,
+      title: 'Leave Request Approved',
+      body: 'Your ${request.typeLabel.toLowerCase()} request was approved by $managerName.',
+      type: NotificationType.leaveApproved,
+      createdAt: DateTime.now(),
+    ));
   }
 
   Future<void> _reject(LeaveRequest request) async {
@@ -87,6 +96,14 @@ class _LeaveScreenState extends State<LeaveScreen>
     if (!confirmed) return;
     final managerName = AuthService.instance.currentEmployee.fullName;
     await AppBackend.leaveRepository.reject(request.id, managerName);
+    await AppBackend.notificationRepository.create(NotificationItem(
+      id: 'NTF${DateTime.now().microsecondsSinceEpoch}',
+      userId: request.employeeId,
+      title: 'Leave Request Rejected',
+      body: 'Your ${request.typeLabel.toLowerCase()} request was rejected by $managerName.',
+      type: NotificationType.leaveRejected,
+      createdAt: DateTime.now(),
+    ));
   }
 
   @override

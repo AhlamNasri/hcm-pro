@@ -60,5 +60,9 @@ class AppBackend {
       payrollRepository = MockPayrollRepository();
       notificationRepository = MockNotificationRepository();
     }
+    // Restore a previously logged-in session (if any) before the app's
+    // first frame, so the router's redirect logic sees the correct
+    // isLoggedIn state immediately instead of bouncing to /login first.
+    await authRepository.restoreSession();
   }
 }

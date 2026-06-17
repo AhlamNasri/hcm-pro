@@ -1,9 +1,13 @@
 import 'dart:math';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../data/mock_data.dart';
 import '../models/employee.dart';
 import '../models/user_account.dart';
 import 'auth_repository.dart';
+
+const _sessionEmployeeIdKey = 'session_employee_id';
 
 class MockAuthRepository implements AuthRepository {
   static final List<UserAccount> _accounts = [
@@ -103,6 +107,8 @@ class MockAuthRepository implements AuthRepository {
         return 'Incorrect password.';
       }
       _currentAccount = account;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_sessionEmployeeIdKey, account.employeeId);
       return null;
     } catch (_) {
       return 'No account found for this email.';
@@ -110,7 +116,25 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> logout() async => _currentAccount = null;
+  Future<void> logout() async {
+    _currentAccount = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_sessionEmployeeIdKey);
+  }
+
+  @override
+  Future<bool> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final employeeId = prefs.getString(_sessionEmployeeIdKey);
+    if (employeeId == null) return false;
+    for (final a in _accounts) {
+      if (a.employeeId == employeeId) {
+        _currentAccount = a;
+        return true;
+      }
+    }
+    return false;
+  }
 
   @override
   Future<String?> changePassword(String currentPassword, String newPassword) async {
@@ -145,6 +169,14 @@ class MockAuthRepository implements AuthRepository {
       role: UserRole.employee,
     ));
     return password;
+  }
+
+  @override
+  Future<String?> findOwnerEmployeeId() async {
+    for (final a in _accounts) {
+      if (a.role == UserRole.owner) return a.employeeId;
+    }
+    return null;
   }
 
   static String _generateTempPassword() {
