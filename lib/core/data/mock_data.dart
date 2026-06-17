@@ -5,6 +5,24 @@ import '../models/payslip.dart';
 class MockData {
   static final List<Employee> employees = [
     Employee(
+      id: 'EMP011',
+      firstName: 'Nawal',
+      lastName: 'Idrissi',
+      email: 'nawal.idrissi@hcmpro.com',
+      phone: '+212 6 10 20 30 40',
+      position: 'CEO',
+      department: Department.executive,
+      status: EmployeeStatus.active,
+      contractType: ContractType.cdi,
+      hireDate: DateTime(2014, 1, 10),
+      salary: 50000,
+      managerId: '',
+      avatarColor: '263238',
+      leaveBalance: 30,
+      totalLeaveAllowance: 30,
+      performanceScore: 4.9,
+    ),
+    Employee(
       id: 'EMP001',
       firstName: 'Ahmed',
       lastName: 'Benali',
@@ -16,9 +34,10 @@ class MockData {
       contractType: ContractType.cdi,
       hireDate: DateTime(2019, 3, 15),
       salary: 18000,
-      managerId: '',
+      managerId: 'EMP011',
       avatarColor: '3949AB',
       leaveBalance: 18,
+      totalLeaveAllowance: 30,
       performanceScore: 4.5,
     ),
     Employee(
@@ -36,6 +55,7 @@ class MockData {
       managerId: 'EMP005',
       avatarColor: 'E91E63',
       leaveBalance: 22,
+      totalLeaveAllowance: 30,
       performanceScore: 4.8,
     ),
     Employee(
@@ -53,6 +73,7 @@ class MockData {
       managerId: 'EMP006',
       avatarColor: '00897B',
       leaveBalance: 10,
+      totalLeaveAllowance: 30,
       performanceScore: 3.9,
     ),
     Employee(
@@ -70,6 +91,7 @@ class MockData {
       managerId: 'EMP001',
       avatarColor: 'F57C00',
       leaveBalance: 5,
+      totalLeaveAllowance: 30,
       performanceScore: 4.2,
     ),
     Employee(
@@ -84,9 +106,10 @@ class MockData {
       contractType: ContractType.cdi,
       hireDate: DateTime(2017, 4, 10),
       salary: 35000,
-      managerId: '',
+      managerId: 'EMP011',
       avatarColor: '5E35B1',
       leaveBalance: 25,
+      totalLeaveAllowance: 30,
       performanceScore: 4.9,
     ),
     Employee(
@@ -101,9 +124,10 @@ class MockData {
       contractType: ContractType.cdi,
       hireDate: DateTime(2016, 11, 25),
       salary: 40000,
-      managerId: '',
+      managerId: 'EMP011',
       avatarColor: '2E7D32',
       leaveBalance: 28,
+      totalLeaveAllowance: 30,
       performanceScore: 4.7,
     ),
     Employee(
@@ -121,6 +145,7 @@ class MockData {
       managerId: 'EMP001',
       avatarColor: 'C62828',
       leaveBalance: 14,
+      totalLeaveAllowance: 30,
       performanceScore: 3.6,
     ),
     Employee(
@@ -138,6 +163,7 @@ class MockData {
       managerId: 'EMP005',
       avatarColor: '6A1B9A',
       leaveBalance: 20,
+      totalLeaveAllowance: 30,
       performanceScore: 4.3,
     ),
     Employee(
@@ -155,6 +181,7 @@ class MockData {
       managerId: 'EMP001',
       avatarColor: '00695C',
       leaveBalance: 16,
+      totalLeaveAllowance: 30,
       performanceScore: 4.1,
     ),
     Employee(
@@ -172,11 +199,10 @@ class MockData {
       managerId: '',
       avatarColor: '37474F',
       leaveBalance: 30,
+      totalLeaveAllowance: 30,
       performanceScore: 3.5,
     ),
   ];
-
-  static final currentEmployee = employees[0];
 
   static final List<LeaveRequest> leaveRequests = [
     LeaveRequest(

@@ -43,20 +43,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildHeader(BuildContext context, Employee employee) {
+    final role = AuthService.instance.currentAccount?.role;
+    final roleColor = role != null ? AppColors.roleColor(role) : AppColors.primaryDark;
     return SliverAppBar(
       expandedHeight: 250,
       pinned: true,
-      backgroundColor: AppColors.primary,
+      backgroundColor: roleColor,
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.primary, Color(0xFF283593)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: SafeArea(
+        background: Stack(
+          children: [
+            Container(color: roleColor),
+            BlobAccentBackdrop(color: Colors.white),
+            Positioned.fill(
+              child: SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -110,48 +109,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+          ),
+          ],
         ),
         collapseMode: CollapseMode.pin,
       ),
-      title: Text('My Profile',
-          style: AppTextStyles.heading2.copyWith(color: Colors.white)),
     );
   }
 
+  // Single connected card sitting directly beneath the header (no overlap,
+  // no gaps between stats) — Profile's structural signature, distinct from
+  // Employee Detail's peeking-above-the-fold overlap card.
   Widget _buildStatsRow(Employee employee) {
     final yearsAtCompany =
         DateTime.now().difference(employee.hireDate).inDays ~/ 365;
 
-    return Row(
-      children: [
-        Expanded(
-          child: _ProfileStat(
-            value: '$yearsAtCompany',
-            label: 'Years\nhere',
-            icon: Icons.business_center_rounded,
-            color: AppColors.primary,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ConnectedStat(
+              value: '$yearsAtCompany',
+              label: 'Years here',
+              icon: Icons.business_center_rounded,
+              color: AppColors.primary,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ProfileStat(
-            value: '${employee.leaveBalance}d',
-            label: 'Leave\nBalance',
-            icon: Icons.beach_access_rounded,
-            color: AppColors.accent,
+          const ConnectedStatDivider(),
+          Expanded(
+            child: ConnectedStat(
+              value: '${employee.leaveBalance}d',
+              label: 'Leave balance',
+              icon: Icons.beach_access_rounded,
+              color: AppColors.accent,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ProfileStat(
-            value:
-                employee.performanceScore.toStringAsFixed(1),
-            label: 'Performance\nScore',
-            icon: Icons.star_rounded,
-            color: AppColors.warning,
+          const ConnectedStatDivider(),
+          Expanded(
+            child: ConnectedStat(
+              value: employee.performanceScore.toStringAsFixed(1),
+              label: 'Performance',
+              icon: Icons.star_rounded,
+              color: AppColors.warning,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -369,44 +378,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ProfileStat extends StatelessWidget {
-  final String value;
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  const _ProfileStat({
-    required this.value,
-    required this.label,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 6),
-          Text(value,
-              style: AppTextStyles.stat
-                  .copyWith(color: color, fontSize: 20)),
-          Text(label,
-              style: AppTextStyles.caption,
-              textAlign: TextAlign.center),
-        ],
       ),
     );
   }

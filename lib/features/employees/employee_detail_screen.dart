@@ -5,6 +5,7 @@ import 'package:percent_indicator/percent_indicator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/employee.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/payslip.dart';
 import '../../core/services/app_backend.dart';
 import '../../shared/widgets/app_widgets.dart';
 import 'add_employee_sheet.dart';
@@ -134,7 +135,21 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                ShimmerBox(height: 160, width: double.infinity, borderRadius: BorderRadius.circular(18)),
+                const SizedBox(height: 16),
+                const Expanded(child: ShimmerListPlaceholder(itemCount: 3, itemHeight: 120)),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     final employee = _employee;
     if (employee == null) {
@@ -153,8 +168,9 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
       body: CustomScrollView(
         slivers: [
           _buildHeader(context, employee),
+          SliverToBoxAdapter(child: _buildQuickStatsOverlap(employee)),
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _buildInfoCard(employee),
@@ -182,9 +198,9 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
 
   Widget _buildHeader(BuildContext context, Employee employee) {
     return SliverAppBar(
-      expandedHeight: 220,
+      expandedHeight: 200,
       pinned: true,
-      backgroundColor: AppColors.primary,
+      backgroundColor: AppColors.primaryDark,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_rounded,
             color: Colors.white, size: 20),
@@ -197,19 +213,15 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.primary, Color(0xFF283593)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: SafeArea(
+        background: Stack(
+          children: [
+            Container(color: AppColors.primaryDark),
+            BlobAccentBackdrop(color: employee.avatarColorValue),
+            Positioned.fill(
+              child: SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 40),
                 AvatarWidget(
                   initials: employee.initials,
                   color: Colors.white,
@@ -232,11 +244,64 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
               ],
             ),
           ),
+          ),
+          ],
         ),
         collapseMode: CollapseMode.pin,
       ),
-      title: Text(employee.fullName,
-          style: AppTextStyles.heading2.copyWith(color: Colors.white)),
+    );
+  }
+
+  /// A card that peeks above the fold, overlapping the cover header — the
+  /// distinct structural signature of this screen (vs. the dashboard's flat
+  /// stat grid or the profile's connected stats row).
+  Widget _buildQuickStatsOverlap(Employee employee) {
+    final yearsAtCompany =
+        DateTime.now().difference(employee.hireDate).inDays ~/ 365;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, -28, 16, 0),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ConnectedStat(
+              icon: Icons.business_center_rounded,
+              value: '$yearsAtCompany',
+              label: yearsAtCompany == 1 ? 'Year here' : 'Years here',
+              color: AppColors.primary,
+            ),
+          ),
+          const ConnectedStatDivider(),
+          Expanded(
+            child: ConnectedStat(
+              icon: Icons.beach_access_rounded,
+              value: '${employee.leaveBalance}d',
+              label: 'Leave left',
+              color: AppColors.accent,
+            ),
+          ),
+          const ConnectedStatDivider(),
+          Expanded(
+            child: ConnectedStat(
+              icon: Icons.star_rounded,
+              value: employee.performanceScore.toStringAsFixed(1),
+              label: 'Performance',
+              color: AppColors.warning,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -287,6 +352,25 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
   }
 
   Widget _buildPerformanceCard(Employee employee) {
+    return StreamBuilder<List<AttendanceRecord>>(
+      stream: AppBackend.payrollRepository.streamAttendanceForEmployee(employee.id),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? const <AttendanceRecord>[];
+        final onTimeRate =
+            records.isEmpty ? null : (records.where((r) => !r.isLate).length / records.length);
+        return _buildPerformanceCardContent(employee, onTimeRate);
+      },
+    );
+  }
+
+  Widget _buildPerformanceCardContent(Employee employee, double? onTimeRate) {
+    final yearsAtCompany =
+        DateTime.now().difference(employee.hireDate).inDays / 365;
+    final tenureProgress = (yearsAtCompany / 5).clamp(0.0, 1.0);
+    final leaveUtilization = employee.totalLeaveAllowance == 0
+        ? 0.0
+        : (employee.leaveDaysUsed / employee.totalLeaveAllowance).clamp(0.0, 1.0);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -334,7 +418,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                               : filled
                                   ? Icons.star_rounded
                                   : Icons.star_outline_rounded,
-                          color: const Color(0xFFFFB300),
+                          color: AppColors.warning,
                           size: 20,
                         );
                       }),
@@ -361,13 +445,15 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _SkillBar(label: 'Technical Skills', value: 0.85, color: AppColors.primary),
+          _SkillBar(label: 'Tenure (of 5y)', value: tenureProgress, color: AppColors.primary),
           const SizedBox(height: 8),
-          _SkillBar(label: 'Communication', value: 0.78, color: AppColors.accent),
+          _SkillBar(label: 'Leave Utilization', value: leaveUtilization, color: AppColors.accent),
           const SizedBox(height: 8),
-          _SkillBar(label: 'Leadership', value: 0.72, color: AppColors.success),
-          const SizedBox(height: 8),
-          _SkillBar(label: 'Punctuality', value: 0.90, color: AppColors.warning),
+          if (onTimeRate != null)
+            _SkillBar(label: 'On-Time Rate', value: onTimeRate, color: AppColors.success)
+          else
+            Text('On-Time Rate: no attendance recorded yet',
+                style: AppTextStyles.caption),
         ],
       ),
     );
@@ -425,7 +511,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
           const SizedBox(height: 16),
           LinearPercentIndicator(
             lineHeight: 8,
-            percent: (30 - employee.leaveBalance) / 30,
+            percent: employee.leaveDaysUsed / employee.totalLeaveAllowance,
             progressColor: AppColors.accent,
             backgroundColor: AppColors.accentLight,
             barRadius: const Radius.circular(8),
@@ -435,9 +521,10 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Used: ${30 - employee.leaveBalance} days',
+              Text('Used: ${employee.leaveDaysUsed} days',
                   style: AppTextStyles.caption),
-              Text('Total: 30 days', style: AppTextStyles.caption),
+              Text('Total: ${employee.totalLeaveAllowance} days',
+                  style: AppTextStyles.caption),
             ],
           ),
           if (leaves.isNotEmpty) ...[
@@ -574,11 +661,11 @@ class _StatusChip extends StatelessWidget {
     String label;
     switch (employee.status) {
       case EmployeeStatus.active:
-        color = const Color(0xFF66BB6A);
+        color = AppColors.success;
         label = '● Active';
         break;
       case EmployeeStatus.onLeave:
-        color = const Color(0xFFFFA726);
+        color = AppColors.warning;
         label = '● On Leave';
         break;
       case EmployeeStatus.inactive:
@@ -676,3 +763,4 @@ class _SkillBar extends StatelessWidget {
     );
   }
 }
+

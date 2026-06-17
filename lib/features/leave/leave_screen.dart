@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/models/employee.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/user_account.dart';
 import '../../core/services/app_backend.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/leave_approval_policy.dart';
 import '../../shared/widgets/app_widgets.dart';
 
 class LeaveScreen extends StatefulWidget {
@@ -19,6 +22,7 @@ class _LeaveScreenState extends State<LeaveScreen>
   late TabController _tabCtrl;
   late bool _isManager;
   late String _myId;
+  late Future<List<Employee>> _employeesFuture;
 
   @override
   void initState() {
@@ -27,6 +31,9 @@ class _LeaveScreenState extends State<LeaveScreen>
     _myId = auth.currentEmployee.id;
     _isManager = auth.isManager;
     _tabCtrl = TabController(length: _isManager ? 2 : 1, vsync: this);
+    if (_isManager) {
+      _employeesFuture = AppBackend.employeeRepository.getAll();
+    }
   }
 
   @override
@@ -98,79 +105,65 @@ class _LeaveScreenState extends State<LeaveScreen>
             headerSliverBuilder: (context, _) => [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 180,
-                backgroundColor: AppColors.primary,
+                expandedHeight: 230,
+                backgroundColor: AppColors.primaryDark,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.primary, Color(0xFF283593)],
-                      ),
-                    ),
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 40),
-                            Text('Leave Management',
-                                style: AppTextStyles.heading1
-                                    .copyWith(color: Colors.white)),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                _LeaveCountBubble(
-                                  label: 'Balance',
-                                  value: '${employee.leaveBalance}d',
-                                  icon: Icons.beach_access_rounded,
-                                  color: AppColors.accent,
-                                ),
-                                const SizedBox(width: 12),
-                                _LeaveCountBubble(
-                                  label: 'Used',
-                                  value: '${30 - employee.leaveBalance}d',
-                                  icon: Icons.check_circle_outline_rounded,
-                                  color: const Color(0xFF66BB6A),
-                                ),
-                                const SizedBox(width: 12),
-                                _LeaveCountBubble(
-                                  label: 'Pending',
-                                  value: '$pendingCount',
-                                  icon: Icons.pending_actions_rounded,
-                                  color: const Color(0xFFFFA726),
-                                ),
-                              ],
-                            ),
-                          ],
+                  background: Stack(
+                    children: [
+                      Container(color: AppColors.primaryDark),
+                      BlobAccentBackdrop(color: AppColors.primary),
+                      Positioned.fill(
+                        child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Leave Management',
+                                  style: AppTextStyles.heading1
+                                      .copyWith(color: Colors.white)),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  _LeaveCountBubble(
+                                    label: 'Balance',
+                                    value: '${employee.leaveBalance}d',
+                                    icon: Icons.beach_access_rounded,
+                                    color: AppColors.accent,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _LeaveCountBubble(
+                                    label: 'Used',
+                                    value: '${employee.leaveDaysUsed}d',
+                                    icon: Icons.check_circle_outline_rounded,
+                                    color: AppColors.success,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _LeaveCountBubble(
+                                    label: 'Pending',
+                                    value: '$pendingCount',
+                                    icon: Icons.pending_actions_rounded,
+                                    color: AppColors.warning,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                      ),
+                    ],
                   ),
                   collapseMode: CollapseMode.pin,
                 ),
-                title: Text('Leave Management',
-                    style:
-                        AppTextStyles.heading2.copyWith(color: Colors.white)),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(46),
-                  child: Container(
-                    color: AppColors.primary,
-                    child: TabBar(
-                      controller: _tabCtrl,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white54,
-                      indicatorColor: Colors.white,
-                      indicatorWeight: 2.5,
-                      labelStyle: AppTextStyles.label
-                          .copyWith(color: Colors.white, letterSpacing: 0.3),
-                      tabs: [
-                        const Tab(text: 'My Requests'),
-                        if (_isManager) const Tab(text: 'Team Requests'),
-                      ],
-                    ),
-                  ),
+                bottom: SegmentedTabBar(
+                  controller: _tabCtrl,
+                  color: AppColors.primaryDark,
+                  labels: [
+                    'My Requests',
+                    if (_isManager) 'Team Requests',
+                  ],
                 ),
               ),
             ],
@@ -179,17 +172,37 @@ class _LeaveScreenState extends State<LeaveScreen>
               children: [
                 _RequestList(requests: myRequests, isMyList: true),
                 if (_isManager)
-                  StreamBuilder<List<LeaveRequest>>(
-                    stream: AppBackend.leaveRepository.streamAll(),
-                    builder: (context, teamSnapshot) {
-                      final team = (teamSnapshot.data ?? const <LeaveRequest>[])
-                          .where((l) => l.employeeId != _myId)
-                          .toList();
-                      return _RequestList(
-                        requests: team,
-                        isMyList: false,
-                        onApprove: _approve,
-                        onReject: _reject,
+                  FutureBuilder<List<Employee>>(
+                    future: _employeesFuture,
+                    builder: (context, employeesSnapshot) {
+                      final employeesById = {
+                        for (final e in employeesSnapshot.data ?? const <Employee>[])
+                          e.id: e,
+                      };
+                      final isOwner =
+                          AuthService.instance.currentAccount?.role ==
+                              UserRole.owner;
+                      return StreamBuilder<List<LeaveRequest>>(
+                        stream: AppBackend.leaveRepository.streamAll(),
+                        builder: (context, teamSnapshot) {
+                          final team = (teamSnapshot.data ?? const <LeaveRequest>[])
+                              .where((l) {
+                                final requester = employeesById[l.employeeId];
+                                if (requester == null) return false;
+                                return LeaveApprovalPolicy.canReview(
+                                  approver: employee,
+                                  requester: requester,
+                                  approverIsOwner: isOwner,
+                                );
+                              })
+                              .toList();
+                          return _RequestList(
+                            requests: team,
+                            isMyList: false,
+                            onApprove: _approve,
+                            onReject: _reject,
+                          );
+                        },
                       );
                     },
                   ),

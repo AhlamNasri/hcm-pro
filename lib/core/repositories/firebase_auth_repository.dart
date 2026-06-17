@@ -1,5 +1,8 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:firebase_core/firebase_core.dart';
 
 import '../models/employee.dart';
 import '../models/user_account.dart';
@@ -93,5 +96,45 @@ class FirebaseAuthRepository implements AuthRepository {
     } on fb.FirebaseAuthException catch (e) {
       return e.message ?? 'Could not change password.';
     }
+  }
+
+  @override
+  Future<String> createAccountForEmployee({
+    required String employeeId,
+    required String email,
+  }) async {
+    final password = _generateTempPassword();
+    // Creating a user via the default FirebaseAuth instance signs the
+    // caller into that new account, kicking the HR Manager out of their own
+    // session. Provision it on a throwaway secondary app instance instead,
+    // so the primary instance (and HR's session) is never touched.
+    final secondaryApp = await Firebase.initializeApp(
+      name: 'employee-provisioning-${DateTime.now().microsecondsSinceEpoch}',
+      options: Firebase.app().options,
+    );
+    try {
+      final secondaryAuth = fb.FirebaseAuth.instanceFor(app: secondaryApp);
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final uid = credential.user!.uid;
+      await secondaryAuth.signOut();
+      await _firestore.collection('users').doc(uid).set({
+        'employeeId': employeeId,
+        'role': UserRole.employee.name,
+      });
+      return password;
+    } on fb.FirebaseAuthException catch (e) {
+      throw StateError(e.message ?? 'Could not create account.');
+    } finally {
+      await secondaryApp.delete();
+    }
+  }
+
+  static String _generateTempPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final rand = Random.secure();
+    return List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 }

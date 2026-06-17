@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum Department { hr, it, finance, marketing, operations, sales, legal }
+enum Department { executive, hr, it, finance, marketing, operations, sales, legal }
 
 enum EmployeeStatus { active, onLeave, inactive }
 
@@ -21,6 +21,7 @@ class Employee {
   final String managerId;
   final String avatarColor;
   final int leaveBalance;
+  final int totalLeaveAllowance;
   final double performanceScore;
 
   const Employee({
@@ -38,8 +39,11 @@ class Employee {
     required this.managerId,
     required this.avatarColor,
     required this.leaveBalance,
+    required this.totalLeaveAllowance,
     required this.performanceScore,
   });
+
+  int get leaveDaysUsed => totalLeaveAllowance - leaveBalance;
 
   String get fullName => '$firstName $lastName';
 
@@ -50,6 +54,8 @@ class Employee {
 
   String get departmentLabel {
     switch (department) {
+      case Department.executive:
+        return 'Executive';
       case Department.hr:
         return 'Human Resources';
       case Department.it:
@@ -75,6 +81,7 @@ class Employee {
     String? position,
     EmployeeStatus? status,
     int? leaveBalance,
+    int? totalLeaveAllowance,
     double? performanceScore,
   }) {
     return Employee(
@@ -92,6 +99,7 @@ class Employee {
       managerId: managerId,
       avatarColor: avatarColor,
       leaveBalance: leaveBalance ?? this.leaveBalance,
+      totalLeaveAllowance: totalLeaveAllowance ?? this.totalLeaveAllowance,
       performanceScore: performanceScore ?? this.performanceScore,
     );
   }
@@ -125,6 +133,7 @@ class Employee {
       managerId: data['managerId'] as String? ?? '',
       avatarColor: data['avatarColor'] as String,
       leaveBalance: (data['leaveBalance'] as num).toInt(),
+      totalLeaveAllowance: (data['totalLeaveAllowance'] as num?)?.toInt() ?? 30,
       performanceScore: (data['performanceScore'] as num).toDouble(),
     );
   }
@@ -144,6 +153,7 @@ class Employee {
       'managerId': managerId,
       'avatarColor': avatarColor,
       'leaveBalance': leaveBalance,
+      'totalLeaveAllowance': totalLeaveAllowance,
       'performanceScore': performanceScore,
     };
   }

@@ -1,10 +1,18 @@
+import 'dart:math';
+
 import '../data/mock_data.dart';
 import '../models/employee.dart';
 import '../models/user_account.dart';
 import 'auth_repository.dart';
 
 class MockAuthRepository implements AuthRepository {
-  static const List<UserAccount> _accounts = [
+  static final List<UserAccount> _accounts = [
+    UserAccount(
+      email: 'nawal.idrissi@hcmpro.com',
+      password: 'owner123',
+      employeeId: 'EMP011',
+      role: UserRole.owner,
+    ),
     UserAccount(
       email: 'ahmed.benali@hcmpro.com',
       password: 'admin123',
@@ -116,5 +124,32 @@ class MockAuthRepository implements AuthRepository {
     }
     _passwordOverrides[normalizedEmail] = newPassword;
     return null;
+  }
+
+  @override
+  Future<String> createAccountForEmployee({
+    required String employeeId,
+    required String email,
+  }) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final exists =
+        _accounts.any((a) => a.email.toLowerCase() == normalizedEmail);
+    if (exists) {
+      throw StateError('An account with this email already exists.');
+    }
+    final password = _generateTempPassword();
+    _accounts.add(UserAccount(
+      email: email.trim(),
+      password: password,
+      employeeId: employeeId,
+      role: UserRole.employee,
+    ));
+    return password;
+  }
+
+  static String _generateTempPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final rand = Random.secure();
+    return List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 }

@@ -21,4 +21,17 @@ class FirebasePayrollRepository implements PayrollRepository {
               .toList(),
         );
   }
+
+  @override
+  Stream<List<AttendanceRecord>> streamAttendanceForEmployee(String employeeId) {
+    return _firestore
+        .collection('attendance')
+        .where('employeeId', isEqualTo: employeeId)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => AttendanceRecord.fromFirestore(doc.id, doc.data()))
+              .toList(),
+        );
+  }
 }

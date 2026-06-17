@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/employee.dart';
@@ -71,36 +72,42 @@ class _EmployeesScreenState extends State<EmployeesScreen>
         headerSliverBuilder: (context, _) => [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppColors.primary,
-            expandedHeight: 110,
+            backgroundColor: AppColors.primaryDark,
+            // expandedHeight must clear: top safe-area inset + this header's
+            // own content + the SegmentedTabBar's overlay height (66) drawn
+            // at the bottom of this same region (it does NOT add on top of
+            // expandedHeight) — otherwise content bleeds into the tab bar.
+            expandedHeight: 150,
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF283593)],
-                  ),
-                ),
-                alignment: Alignment.bottomLeft,
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Team Directory',
-                        style: AppTextStyles.heading1
-                            .copyWith(color: Colors.white)),
-                    Text(
-                      '${_employees.length} employees',
-                      style: AppTextStyles.body2
-                          .copyWith(color: Colors.white60),
+              background: Stack(
+                children: [
+                  Container(color: AppColors.primaryDark),
+                  BlobAccentBackdrop(color: AppColors.primary),
+                  Positioned.fill(
+                    child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Team Directory',
+                              style: AppTextStyles.heading1
+                                  .copyWith(color: Colors.white)),
+                          Text(
+                            '${_employees.length} employees',
+                            style: AppTextStyles.body2
+                                .copyWith(color: Colors.white60),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                  ),
+                ],
               ),
               collapseMode: CollapseMode.pin,
             ),
-            title: Text('Team Directory',
-                style: AppTextStyles.heading2.copyWith(color: Colors.white)),
             actions: [
               IconButton(
                 icon: const Icon(Icons.filter_list_rounded,
@@ -108,37 +115,21 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                 onPressed: _showFilterSheet,
               ),
             ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(48),
-              child: Container(
-                color: AppColors.primary,
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white54,
-                  indicatorColor: Colors.white,
-                  indicatorWeight: 2.5,
-                  labelStyle: AppTextStyles.label
-                      .copyWith(color: Colors.white, letterSpacing: 0.3),
-                  tabs: const [
-                    Tab(text: 'All'),
-                    Tab(text: 'Active'),
-                    Tab(text: 'On Leave'),
-                    Tab(text: 'Inactive'),
-                  ],
-                  onTap: (i) {
-                    setState(() {
-                      _selectedStatus = i == 0
-                          ? null
-                          : i == 1
-                              ? EmployeeStatus.active
-                              : i == 2
-                                  ? EmployeeStatus.onLeave
-                                  : EmployeeStatus.inactive;
-                    });
-                  },
-                ),
-              ),
+            bottom: SegmentedTabBar(
+              controller: _tabController,
+              color: AppColors.primaryDark,
+              labels: const ['All', 'Active', 'On Leave', 'Inactive'],
+              onTap: (i) {
+                setState(() {
+                  _selectedStatus = i == 0
+                      ? null
+                      : i == 1
+                          ? EmployeeStatus.active
+                          : i == 2
+                              ? EmployeeStatus.onLeave
+                              : EmployeeStatus.inactive;
+                });
+              },
             ),
           ),
         ],
@@ -167,7 +158,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
             const SizedBox(height: 8),
             if (_isLoading)
               const Expanded(
-                child: Center(child: CircularProgressIndicator()),
+                child: ShimmerListPlaceholder(itemCount: 6, itemHeight: 96),
               )
             else if (_filtered.isEmpty)
               const Expanded(
@@ -224,14 +215,54 @@ class _EmployeesScreenState extends State<EmployeesScreen>
     await AppBackend.employeeRepository.add(employee);
     await _loadEmployees();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${employee.fullName} added',
-            style: AppTextStyles.body2.copyWith(color: Colors.white)),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
+    try {
+      final tempPassword = await AppBackend.authRepository
+          .createAccountForEmployee(employeeId: employee.id, email: employee.email);
+      if (!context.mounted) return;
+      await _showCredentialsDialog(context, employee.email, tempPassword);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${employee.fullName} added, but the login account could not be created: $e',
+              style: AppTextStyles.body2.copyWith(color: Colors.white)),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showCredentialsDialog(
+      BuildContext context, String email, String tempPassword) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Employee account created', style: AppTextStyles.heading2),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Share these credentials with the employee. They can change '
+                'their password from Profile > Security after signing in.',
+                style: AppTextStyles.body2),
+            const SizedBox(height: 16),
+            _CredentialRow(label: 'Email', value: email),
+            const SizedBox(height: 8),
+            _CredentialRow(label: 'Temporary password', value: tempPassword),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Done',
+                style: AppTextStyles.body1.copyWith(color: AppColors.primary)),
+          ),
+        ],
       ),
     );
   }
@@ -269,13 +300,26 @@ class _EmployeeCard extends StatelessWidget {
       onTap: () => context.push('/employees/${employee.id}'),
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.divider),
         ),
-        child: Row(
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: employee.avatarColorValue,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
           children: [
             AvatarWidget(
               initials: employee.initials,
@@ -324,7 +368,7 @@ class _EmployeeCard extends StatelessWidget {
                       Row(
                         children: [
                           const Icon(Icons.star_rounded,
-                              color: Color(0xFFFFB300), size: 14),
+                              color: AppColors.warning, size: 14),
                           const SizedBox(width: 2),
                           Text(
                             employee.performanceScore.toStringAsFixed(1),
@@ -344,6 +388,11 @@ class _EmployeeCard extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded,
                 color: AppColors.textLight),
           ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -470,6 +519,53 @@ class _DeptChip extends StatelessWidget {
             color: isSelected ? Colors.white : AppColors.primary,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CredentialRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _CredentialRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTextStyles.caption),
+                Text(value,
+                    style: AppTextStyles.body1
+                        .copyWith(fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.primary),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Copied to clipboard',
+                      style: AppTextStyles.body2.copyWith(color: Colors.white)),
+                  backgroundColor: AppColors.success,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

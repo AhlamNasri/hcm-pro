@@ -6,7 +6,12 @@ void main() {
   testWidgets('HCM Pro app smoke test', (WidgetTester tester) async {
     await AppBackend.init();
     await tester.pumpWidget(const HCMProApp());
-    await tester.pumpAndSettle();
+    // The login screen's hero backdrop runs a slow looping AnimationController
+    // (AnimatedBlobAccentBackdrop), which never settles — pump explicit
+    // frames instead of pumpAndSettle() to avoid a timeout.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
     expect(find.text('HCM Pro'), findsAny);
   });
 }

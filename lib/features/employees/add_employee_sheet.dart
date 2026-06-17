@@ -66,9 +66,14 @@ class _AddEmployeeFormState extends State<_AddEmployeeForm> {
     super.dispose();
   }
 
+  /// Standard annual leave entitlement granted to a brand-new employee with
+  /// no leave taken yet. Existing employees keep whatever they already have.
+  static const _defaultLeaveAllowance = 30;
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final base = widget.initial;
+    final totalLeaveAllowance = base?.totalLeaveAllowance ?? _defaultLeaveAllowance;
     final employee = Employee(
       id: base?.id ?? 'EMP${DateTime.now().millisecondsSinceEpoch}',
       firstName: _firstNameCtrl.text.trim(),
@@ -84,7 +89,8 @@ class _AddEmployeeFormState extends State<_AddEmployeeForm> {
       managerId: base?.managerId ?? '',
       avatarColor: base?.avatarColor ??
           _avatarColors[DateTime.now().millisecond % _avatarColors.length],
-      leaveBalance: base?.leaveBalance ?? 22,
+      leaveBalance: base?.leaveBalance ?? totalLeaveAllowance,
+      totalLeaveAllowance: totalLeaveAllowance,
       performanceScore: base?.performanceScore ?? 0,
     );
     Navigator.of(context).pop(employee);

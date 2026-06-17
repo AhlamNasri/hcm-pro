@@ -104,7 +104,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_rounded,
                   color: Colors.white, size: 20),
-              onPressed: () => Navigator.of(context).pop(),
+              // /notifications is always reached via context.go(), which
+              // replaces the whole stack, so there's nothing to pop back
+              // into — go to a known destination instead.
+              onPressed: () => context.go('/dashboard'),
             ),
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,13 +134,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
               ),
             ],
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primary, Color(0xFF283593)],
-                ),
-              ),
-            ),
+            flexibleSpace: Container(color: AppColors.primaryDark),
           ),
           body: notifs.isEmpty
               ? const EmptyState(
@@ -145,15 +142,52 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   title: 'No Notifications',
                   message: 'You are all caught up!',
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: notifs.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final n = notifs[i];
-                    final (icon, color) = _iconAndColorFor(n.type);
-                    return Dismissible(
+              : _buildGroupedList(notifs),
+        );
+      },
+    );
+  }
+
+  Widget _buildGroupedList(List<NotificationItem> notifs) {
+    final sorted = [...notifs]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    const bucketOrder = ['Today', 'Earlier this week', 'Older'];
+    final grouped = <String, List<NotificationItem>>{};
+    for (final n in sorted) {
+      grouped.putIfAbsent(_bucketFor(n.createdAt), () => []).add(n);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        for (final bucket in bucketOrder)
+          if (grouped[bucket] != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+              child: Text(bucket, style: AppTextStyles.label),
+            ),
+            for (final n in grouped[bucket]!) ...[
+              _buildNotificationCard(n),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+
+  String _bucketFor(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = today.difference(date).inDays;
+    if (diffDays <= 0) return 'Today';
+    if (diffDays <= 7) return 'Earlier this week';
+    return 'Older';
+  }
+
+  Widget _buildNotificationCard(NotificationItem n) {
+    final (icon, color) = _iconAndColorFor(n.type);
+    return Dismissible(
                       key: Key(n.id),
                       direction: DismissDirection.endToStart,
                       confirmDismiss: (_) => _confirmDelete(),
@@ -243,11 +277,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                       ),
                     );
-                  },
-                ),
-        );
-      },
-    );
   }
 
   String _formatTime(DateTime dt) {

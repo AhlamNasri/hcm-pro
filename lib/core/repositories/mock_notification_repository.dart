@@ -37,11 +37,14 @@ class MockNotificationRepository implements NotificationRepository {
   final _changes = StreamController<void>.broadcast();
 
   @override
-  Stream<List<NotificationItem>> streamForUser(String userId) async* {
+  Stream<List<NotificationItem>> streamForUser(String userId) {
     List<NotificationItem> snapshot() =>
         _items.where((n) => n.userId == userId).toList();
-    yield snapshot();
-    yield* _changes.stream.map((_) => snapshot());
+    return Stream.multi((controller) {
+      controller.add(snapshot());
+      final sub = _changes.stream.listen((_) => controller.add(snapshot()));
+      controller.onCancel = sub.cancel;
+    });
   }
 
   @override

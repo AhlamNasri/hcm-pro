@@ -3,11 +3,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/data/mock_data.dart';
 import '../../core/models/employee.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/payslip.dart';
 import '../../core/models/user_account.dart';
+import '../../core/services/app_backend.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/leave_approval_policy.dart';
 import '../../shared/widgets/app_widgets.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -19,11 +21,34 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _scrollController = ScrollController();
+  late Future<List<Employee>> _employeesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _employeesFuture = AppBackend.employeeRepository.getAll();
+  }
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _approve(LeaveRequest request) async {
+    final managerName = AuthService.instance.currentEmployee.fullName;
+    await AppBackend.leaveRepository.approve(request.id, managerName);
+    final employee = await AppBackend.employeeRepository.getById(request.employeeId);
+    if (employee != null) {
+      final newBalance = employee.leaveBalance - request.durationDays;
+      await AppBackend.employeeRepository
+          .update(employee.copyWith(leaveBalance: newBalance < 0 ? 0 : newBalance));
+    }
+  }
+
+  Future<void> _reject(LeaveRequest request) async {
+    final managerName = AuthService.instance.currentEmployee.fullName;
+    await AppBackend.leaveRepository.reject(request.id, managerName);
   }
 
   @override
@@ -34,12 +59,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = DateTime.now();
     final greeting = _greeting();
 
+    final roleColor = AppColors.roleColor(auth.currentAccount!.role);
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
-          _buildAppBar(employee, greeting, now),
+          _buildAppBar(employee, greeting, now, roleColor),
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
@@ -48,29 +75,83 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 16),
                 _buildQuickActions(context, isManager),
                 const SizedBox(height: 20),
-                if (isManager) ...[
-                  _buildStatsGrid(context),
-                  const SizedBox(height: 20),
-                  _buildAttendanceCard(employee),
-                  const SizedBox(height: 20),
-                  _buildHeadcountChart(),
-                  const SizedBox(height: 20),
-                  _buildPendingLeaveSection(context),
-                  const SizedBox(height: 20),
-                  _buildBirthdays(),
-                ] else ...[
-                  _buildMyStatsGrid(context, employee),
-                  const SizedBox(height: 20),
-                  _buildAttendanceCard(employee),
-                  const SizedBox(height: 20),
-                  _buildMyLeaveCard(context, employee),
-                ],
+                if (isManager)
+                  _buildManagerSection(context, employee)
+                else
+                  _buildEmployeeSection(context, employee),
                 const SizedBox(height: 80),
               ]),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildEmployeeSection(BuildContext context, Employee employee) {
+    return StreamBuilder<List<LeaveRequest>>(
+      stream: AppBackend.leaveRepository.streamForEmployee(employee.id),
+      builder: (context, leaveSnapshot) {
+        final myLeaves = leaveSnapshot.data ?? const <LeaveRequest>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildMyStatsGrid(context, employee, myLeaves),
+            const SizedBox(height: 20),
+            _buildAttendanceSection(employee),
+            const SizedBox(height: 20),
+            _buildMyLeaveCard(context, myLeaves),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildManagerSection(BuildContext context, Employee employee) {
+    return FutureBuilder<List<Employee>>(
+      future: _employeesFuture,
+      builder: (context, employeesSnapshot) {
+        if (employeesSnapshot.connectionState == ConnectionState.waiting) {
+          return Column(
+            children: [
+              ShimmerBox(height: 140, width: double.infinity),
+              const SizedBox(height: 12),
+              ShimmerBox(height: 90, width: double.infinity),
+            ],
+          );
+        }
+        final allEmployees = employeesSnapshot.data ?? const <Employee>[];
+        return StreamBuilder<List<LeaveRequest>>(
+          stream: AppBackend.leaveRepository.streamAll(),
+          builder: (context, leaveSnapshot) {
+            final allLeaves = leaveSnapshot.data ?? const <LeaveRequest>[];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildStatsGrid(context, employee, allEmployees, allLeaves),
+                const SizedBox(height: 20),
+                _buildAttendanceSection(employee),
+                const SizedBox(height: 20),
+                _buildHeadcountChart(allEmployees),
+                const SizedBox(height: 20),
+                _buildPendingLeaveSection(context, employee, allEmployees, allLeaves),
+                const SizedBox(height: 20),
+                _buildBirthdays(),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAttendanceSection(Employee employee) {
+    return StreamBuilder<List<AttendanceRecord>>(
+      stream: AppBackend.payrollRepository.streamAttendanceForEmployee(employee.id),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? const <AttendanceRecord>[];
+        return _buildAttendanceCard(records);
+      },
     );
   }
 
@@ -81,22 +162,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return 'Good evening';
   }
 
-  Widget _buildAppBar(Employee employee, String greeting, DateTime now) {
+  Widget _buildAppBar(Employee employee, String greeting, DateTime now, Color roleColor) {
     return SliverAppBar(
       expandedHeight: 160,
       floating: false,
       pinned: true,
-      backgroundColor: AppColors.primary,
+      backgroundColor: roleColor,
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.primary, Color(0xFF283593)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: SafeArea(
+        background: Stack(
+          children: [
+            Container(color: roleColor),
+            BlobAccentBackdrop(color: Colors.white),
+            Positioned.fill(
+              child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
@@ -154,7 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             width: 10,
                             height: 10,
                             decoration: const BoxDecoration(
-                              color: Color(0xFFFF5252),
+                              color: AppColors.danger,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -175,11 +253,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
+          ),
+          ],
         ),
         collapseMode: CollapseMode.pin,
       ),
-      title: Text('Dashboard',
-          style: AppTextStyles.heading2.copyWith(color: Colors.white)),
       actions: [
         IconButton(
           icon: const Icon(Icons.notifications_outlined,
@@ -192,8 +270,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildRoleBanner(UserRole role) {
-    final isManager = role == UserRole.hrManager || role == UserRole.manager;
+    final color = AppColors.roleColor(role);
+    final icon = switch (role) {
+      UserRole.owner => Icons.workspace_premium_rounded,
+      UserRole.hrManager => Icons.admin_panel_settings_rounded,
+      UserRole.manager => Icons.supervisor_account_rounded,
+      UserRole.employee => Icons.badge_rounded,
+    };
     final label = switch (role) {
+      UserRole.owner => 'Logged in as Owner — full access',
       UserRole.hrManager => 'Logged in as HR Manager — full access',
       UserRole.manager => 'Logged in as Manager — team access',
       UserRole.employee => 'Logged in as Employee — personal view',
@@ -201,29 +286,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isManager
-            ? AppColors.primaryLighter
-            : AppColors.accentLight,
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isManager
-              ? AppColors.primary.withValues(alpha: 0.25)
-              : AppColors.accent.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
-          Icon(
-            isManager ? Icons.admin_panel_settings_rounded : Icons.badge_rounded,
-            color: isManager ? AppColors.primary : AppColors.accent,
-            size: 18,
-          ),
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
               style: AppTextStyles.body2.copyWith(
-                color: isManager ? AppColors.primary : AppColors.accent,
+                color: color,
                 fontWeight: FontWeight.w600,
               ),
               overflow: TextOverflow.ellipsis,
@@ -234,65 +309,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMyStatsGrid(BuildContext context, Employee employee) {
-    final myLeaves = MockData.leaveRequests
-        .where((l) => l.employeeId == employee.id)
-        .toList();
+  Widget _buildMyStatsGrid(
+      BuildContext context, Employee employee, List<LeaveRequest> myLeaves) {
     final pendingCount =
-        myLeaves.where((l) => l.status.name == 'pending').length;
+        myLeaves.where((l) => l.status == LeaveStatus.pending).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('My Overview', style: AppTextStyles.heading2),
         const SizedBox(height: 12),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.3,
+        HeroStatCard(
+          title: 'Leave Balance',
+          value: '${employee.leaveBalance}d',
+          icon: Icons.beach_access_rounded,
+          color: AppColors.accent,
+          subtitle: '$pendingCount pending request${pendingCount == 1 ? '' : 's'}',
+        ),
+        const SizedBox(height: 12),
+        Row(
           children: [
-            StatCard(
-              title: 'Leave Balance',
-              value: '${employee.leaveBalance}d',
-              icon: Icons.beach_access_rounded,
-              color: AppColors.accent,
-              subtitle: 'Days left',
+            Expanded(
+              child: StatCard(
+                title: 'My Requests',
+                value: '${myLeaves.length}',
+                icon: Icons.event_note_rounded,
+                color: AppColors.primary,
+                subtitle: '$pendingCount pending',
+              ),
             ),
-            StatCard(
-              title: 'My Requests',
-              value: '${myLeaves.length}',
-              icon: Icons.event_note_rounded,
-              color: AppColors.primary,
-              subtitle: '$pendingCount pending',
-            ),
-            StatCard(
-              title: 'Performance',
-              value: employee.performanceScore.toStringAsFixed(1),
-              icon: Icons.star_rounded,
-              color: AppColors.warning,
-              subtitle: 'out of 5.0',
-            ),
-            StatCard(
-              title: 'Department',
-              value: employee.department.name.toUpperCase(),
-              icon: Icons.apartment_rounded,
-              color: AppColors.success,
-              subtitle: employee.contractLabel,
+            const SizedBox(width: 12),
+            Expanded(
+              child: StatCard(
+                title: 'Performance',
+                value: employee.performanceScore.toStringAsFixed(1),
+                icon: Icons.star_rounded,
+                color: AppColors.warning,
+                subtitle: 'out of 5.0',
+              ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        StatCard(
+          title: 'Department',
+          value: employee.department.name.toUpperCase(),
+          icon: Icons.apartment_rounded,
+          color: AppColors.success,
+          subtitle: employee.contractLabel,
         ),
       ],
     );
   }
 
-  Widget _buildMyLeaveCard(BuildContext context, Employee employee) {
-    final myLeaves = MockData.leaveRequests
-        .where((l) => l.employeeId == employee.id)
-        .take(3)
-        .toList();
+  Widget _buildMyLeaveCard(BuildContext context, List<LeaveRequest> allMyLeaves) {
+    final myLeaves = allMyLeaves.take(3).toList();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -397,7 +468,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStatsGrid(BuildContext context) {
+  Widget _buildStatsGrid(BuildContext context, Employee employee,
+      List<Employee> allEmployees, List<LeaveRequest> allLeaves) {
+    final activeCount =
+        allEmployees.where((e) => e.status == EmployeeStatus.active).length;
+    final onLeaveCount =
+        allEmployees.where((e) => e.status == EmployeeStatus.onLeave).length;
+    final employeesById = {for (final e in allEmployees) e.id: e};
+    final isOwner =
+        AuthService.instance.currentAccount?.role == UserRole.owner;
+    final pendingCount = allLeaves.where((l) {
+      if (l.status != LeaveStatus.pending) return false;
+      final requester = employeesById[l.employeeId];
+      if (requester == null) return false;
+      return LeaveApprovalPolicy.canReview(
+        approver: employee,
+        requester: requester,
+        approverIsOwner: isOwner,
+      );
+    }).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -407,51 +497,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onAction: () => context.go('/employees'),
         ),
         const SizedBox(height: 12),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.3,
+        HeroStatCard(
+          title: 'Pending Leaves — needs your review',
+          value: '$pendingCount',
+          icon: Icons.pending_actions_rounded,
+          color: AppColors.warning,
+          subtitle: pendingCount == 0 ? 'All caught up' : 'Tap to review',
+          onTap: () => context.go('/leave'),
+        ),
+        const SizedBox(height: 12),
+        Row(
           children: [
-            StatCard(
-              title: 'Total Employees',
-              value: '${MockData.employees.length}',
-              icon: Icons.people_rounded,
-              color: AppColors.primary,
-              subtitle: '+2 this month',
+            Expanded(
+              child: StatCard(
+                title: 'Total Employees',
+                value: '${allEmployees.length}',
+                icon: Icons.people_rounded,
+                color: AppColors.primary,
+                subtitle: '$activeCount active',
+              ),
             ),
-            StatCard(
-              title: 'Active Today',
-              value: '${MockData.activeCount}',
-              icon: Icons.check_circle_rounded,
-              color: AppColors.success,
-              subtitle: '${MockData.onLeaveCount} on leave',
-            ),
-            StatCard(
-              title: 'Pending Leaves',
-              value: '${MockData.pendingLeaveCount}',
-              icon: Icons.pending_actions_rounded,
-              color: AppColors.warning,
-              subtitle: 'Needs review',
-              onTap: () => context.go('/leave'),
-            ),
-            StatCard(
-              title: 'My Leave Balance',
-              value: '${MockData.currentEmployee.leaveBalance}d',
-              icon: Icons.beach_access_rounded,
-              color: AppColors.accent,
-              subtitle: 'Days remaining',
+            const SizedBox(width: 12),
+            Expanded(
+              child: StatCard(
+                title: 'Active Today',
+                value: '$activeCount',
+                icon: Icons.check_circle_rounded,
+                color: AppColors.success,
+                subtitle: '$onLeaveCount on leave',
+              ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        StatCard(
+          title: 'My Leave Balance',
+          value: '${employee.leaveBalance}d',
+          icon: Icons.beach_access_rounded,
+          color: AppColors.accent,
+          subtitle: 'Days remaining',
         ),
       ],
     );
   }
 
-  Widget _buildAttendanceCard(Employee employee) {
-    final records = MockData.attendance;
+  Widget _buildAttendanceCard(List<AttendanceRecord> records) {
+    if (records.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: const EmptyState(
+          icon: Icons.access_time_rounded,
+          title: 'No attendance yet',
+          message: 'Check-ins will appear here once recorded.',
+        ),
+      );
+    }
     final totalHours =
         records.fold<double>(0, (sum, r) => sum + r.hoursWorked);
     final avgHours = totalHours / records.length;
@@ -562,8 +667,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildHeadcountChart() {
-    final data = MockData.employeesByDepartment;
+  Widget _buildHeadcountChart(List<Employee> allEmployees) {
+    final data = <Department, int>{};
+    for (final e in allEmployees) {
+      data[e.department] = (data[e.department] ?? 0) + 1;
+    }
     final colors = [
       AppColors.primary,
       AppColors.accent,
@@ -571,7 +679,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       AppColors.warning,
       AppColors.pending,
       AppColors.danger,
-      const Color(0xFF00897B),
+      AppColors.roleEmployee,
     ];
 
     final sections = data.entries.toList().asMap().entries.map((e) {
@@ -664,6 +772,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _deptShort(Department dept) {
     switch (dept) {
+      case Department.executive:
+        return 'Executive';
       case Department.hr:
         return 'HR';
       case Department.it:
@@ -681,10 +791,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Widget _buildPendingLeaveSection(BuildContext context) {
-    final pending = MockData.leaveRequests
-        .where((l) => l.status == LeaveStatus.pending)
-        .toList();
+  Widget _buildPendingLeaveSection(BuildContext context, Employee employee,
+      List<Employee> allEmployees, List<LeaveRequest> allLeaves) {
+    final employeesById = {for (final e in allEmployees) e.id: e};
+    final isOwner =
+        AuthService.instance.currentAccount?.role == UserRole.owner;
+    final pending = allLeaves.where((l) {
+      if (l.status != LeaveStatus.pending) return false;
+      final requester = employeesById[l.employeeId];
+      if (requester == null) return false;
+      return LeaveApprovalPolicy.canReview(
+        approver: employee,
+        requester: requester,
+        approverIsOwner: isOwner,
+      );
+    }).toList();
 
     return Column(
       children: [
@@ -701,7 +822,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             message: 'No pending leave requests.',
           )
         else
-          ...pending.map((l) => _PendingLeaveCard(request: l)),
+          ...pending.map((l) => _PendingLeaveCard(
+                request: l,
+                onApprove: _approve,
+                onReject: _reject,
+              )),
       ],
     );
   }
@@ -877,21 +1002,40 @@ class _AttendanceStat extends StatelessWidget {
 
 class _PendingLeaveCard extends StatefulWidget {
   final LeaveRequest request;
-  const _PendingLeaveCard({required this.request});
+  final Future<void> Function(LeaveRequest) onApprove;
+  final Future<void> Function(LeaveRequest) onReject;
+
+  const _PendingLeaveCard({
+    required this.request,
+    required this.onApprove,
+    required this.onReject,
+  });
 
   @override
   State<_PendingLeaveCard> createState() => _PendingLeaveCardState();
 }
 
 class _PendingLeaveCardState extends State<_PendingLeaveCard> {
-  bool _approved = false;
-  bool _rejected = false;
+  bool _isProcessing = false;
+
+  Future<void> _handle(Future<void> Function(LeaveRequest) action) async {
+    setState(() => _isProcessing = true);
+    await action(widget.request);
+    // No setState afterwards: the pending list this card is rendered from
+    // is fed by a stream, so once the backend write lands the card simply
+    // stops being included in the next snapshot.
+  }
+
+  String _initials(String name) {
+    final letters = name.split(' ').where((s) => s.isNotEmpty).map((s) => s[0]);
+    final initials = letters.take(2).join();
+    return initials.isEmpty ? '?' : initials.toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l = widget.request;
     final fmt = DateFormat('d MMM');
-    if (_approved || _rejected) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -903,11 +1047,7 @@ class _PendingLeaveCardState extends State<_PendingLeaveCard> {
       child: Row(
         children: [
           AvatarWidget(
-            initials: l.employeeName
-                .split(' ')
-                .map((s) => s[0])
-                .join()
-                .substring(0, 2),
+            initials: _initials(l.employeeName),
             color: AppColors.accent,
             size: 40,
           ),
@@ -924,21 +1064,34 @@ class _PendingLeaveCardState extends State<_PendingLeaveCard> {
               ],
             ),
           ),
-          Row(
-            children: [
-              _ActionBtn(
-                icon: Icons.close_rounded,
-                color: AppColors.danger,
-                onTap: () => setState(() => _rejected = true),
+          if (_isProcessing)
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
-              const SizedBox(width: 6),
-              _ActionBtn(
-                icon: Icons.check_rounded,
-                color: AppColors.success,
-                onTap: () => setState(() => _approved = true),
-              ),
-            ],
-          ),
+            )
+          else
+            Row(
+              children: [
+                _ActionBtn(
+                  icon: Icons.close_rounded,
+                  color: AppColors.danger,
+                  onTap: () => _handle(widget.onReject),
+                ),
+                const SizedBox(width: 6),
+                _ActionBtn(
+                  icon: Icons.check_rounded,
+                  color: AppColors.success,
+                  onTap: () => _handle(widget.onApprove),
+                ),
+              ],
+            ),
         ],
       ),
     );

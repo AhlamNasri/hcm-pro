@@ -3,7 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/data/mock_data.dart';
+import '../../core/services/app_backend.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/payslip_pdf_service.dart';
 import '../../core/models/payslip.dart';
@@ -20,189 +20,225 @@ class _PayrollScreenState extends State<PayrollScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   int _selectedPayslipIndex = 0;
-  late List<dynamic> _payslips;
+  final _payslipPageCtrl = PageController(viewportFraction: 0.32);
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
-    final uid = AuthService.instance.currentEmployee.id;
-    _payslips = MockData.payslips.where((p) => p.employeeId == uid).toList();
-    if (_payslips.isEmpty) _payslips = MockData.payslips;
   }
 
   @override
   void dispose() {
     _tabCtrl.dispose();
+    _payslipPageCtrl.dispose();
     super.dispose();
   }
 
-  Payslip get _currentPayslip => _payslips[_selectedPayslipIndex];
-
   @override
   Widget build(BuildContext context) {
+    final employeeId = AuthService.instance.currentEmployee.id;
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: NestedScrollView(
         headerSliverBuilder: (context, _) => [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 140,
-            backgroundColor: AppColors.primary,
+            // See employees_screen.dart for why this must clear top inset +
+            // content + the SegmentedTabBar's 66px overlay at the bottom.
+            expandedHeight: 170,
+            backgroundColor: AppColors.primaryDark,
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF283593)],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 40),
-                        Text('Payroll & Payslips',
-                            style: AppTextStyles.heading1
-                                .copyWith(color: Colors.white)),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Your salary history & attendance',
-                          style: AppTextStyles.body2
-                              .copyWith(color: Colors.white60),
-                        ),
-                      ],
+              background: Stack(
+                children: [
+                  Container(color: AppColors.primaryDark),
+                  BlobAccentBackdrop(color: AppColors.primary),
+                  Positioned.fill(
+                    child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Payroll & Payslips',
+                              style: AppTextStyles.heading1
+                                  .copyWith(color: Colors.white)),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Your salary history & attendance',
+                            style: AppTextStyles.body2
+                                .copyWith(color: Colors.white60),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                  ),
+                ],
               ),
               collapseMode: CollapseMode.pin,
             ),
-            title: Text('Payroll',
-                style:
-                    AppTextStyles.heading2.copyWith(color: Colors.white)),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(46),
-              child: Container(
-                color: AppColors.primary,
-                child: TabBar(
-                  controller: _tabCtrl,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white54,
-                  indicatorColor: Colors.white,
-                  indicatorWeight: 2.5,
-                  labelStyle: AppTextStyles.label
-                      .copyWith(color: Colors.white, letterSpacing: 0.3),
-                  tabs: const [
-                    Tab(text: 'Payslips'),
-                    Tab(text: 'Attendance'),
-                  ],
-                ),
-              ),
+            bottom: SegmentedTabBar(
+              controller: _tabCtrl,
+              color: AppColors.primaryDark,
+              labels: const ['Payslips', 'Attendance'],
             ),
           ),
         ],
         body: TabBarView(
           controller: _tabCtrl,
           children: [
-            _buildPayslipsTab(),
-            _buildAttendanceTab(),
+            StreamBuilder<List<Payslip>>(
+              stream: AppBackend.payrollRepository.streamForEmployee(employeeId),
+              builder: (context, snapshot) {
+                final payslips = snapshot.data ?? const <Payslip>[];
+                return _buildPayslipsTab(payslips);
+              },
+            ),
+            StreamBuilder<List<AttendanceRecord>>(
+              stream: AppBackend.payrollRepository
+                  .streamAttendanceForEmployee(employeeId),
+              builder: (context, snapshot) {
+                final records = snapshot.data ?? const <AttendanceRecord>[];
+                return _buildAttendanceTab(records);
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPayslipsTab() {
+  Widget _buildPayslipsTab(List<Payslip> payslips) {
+    if (payslips.isEmpty) {
+      return const EmptyState(
+        icon: Icons.receipt_long_rounded,
+        title: 'No payslips yet',
+        message: 'Your payslips will appear here once payroll is processed.',
+      );
+    }
+    final index = _selectedPayslipIndex.clamp(0, payslips.length - 1);
+    final current = payslips[index];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildPayslipSelector(),
+          _buildPayslipSelector(payslips),
           const SizedBox(height: 16),
-          _buildNetSalaryCard(),
+          _buildNetSalaryCard(current),
           const SizedBox(height: 16),
-          _buildBreakdownCard(),
+          _buildBreakdownCard(current),
           const SizedBox(height: 16),
-          _buildSalaryTrendChart(),
+          _buildSalaryTrendChart(payslips),
           const SizedBox(height: 80),
         ],
       ),
     );
   }
 
-  Widget _buildPayslipSelector() {
+  Widget _buildPayslipSelector(List<Payslip> payslips) {
+    // A scroll-driven scale/opacity carousel instead of a flat chip row —
+    // the focused month visibly "lifts" while neighbors recede.
     return SizedBox(
-      height: 72,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _payslips.length,
-        itemBuilder: (context, i) {
-          final p = _payslips[i];
-          final selected = i == _selectedPayslipIndex;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedPayslipIndex = i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 10),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color:
-                    selected ? AppColors.primary : AppColors.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: selected
-                      ? AppColors.primary
-                      : AppColors.divider,
+      height: 86,
+      child: AnimatedBuilder(
+        animation: _payslipPageCtrl,
+        builder: (context, _) {
+          return PageView.builder(
+            controller: _payslipPageCtrl,
+            itemCount: payslips.length,
+            onPageChanged: (i) => setState(() => _selectedPayslipIndex = i),
+            itemBuilder: (context, i) {
+              var page = _selectedPayslipIndex.toDouble();
+              if (_payslipPageCtrl.hasClients &&
+                  _payslipPageCtrl.position.haveDimensions) {
+                page = _payslipPageCtrl.page ?? page;
+              }
+              final delta = (page - i).abs().clamp(0.0, 1.0);
+              final scale = 1 - delta * 0.18;
+              final opacity = 1 - delta * 0.55;
+              final p = payslips[i];
+              final selected = i == _selectedPayslipIndex.clamp(0, payslips.length - 1);
+              return GestureDetector(
+                onTap: () => _payslipPageCtrl.animateToPage(i,
+                    duration: const Duration(milliseconds: 250), curve: Curves.easeOut),
+                child: Center(
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selected ? AppColors.primary : AppColors.cardBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: selected ? AppColors.primary : AppColors.divider,
+                          ),
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.25),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              p.monthName.substring(0, 3),
+                              style: AppTextStyles.body1.copyWith(
+                                color: selected ? Colors.white : AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              '${p.year}',
+                              style: AppTextStyles.caption.copyWith(
+                                color: selected ? Colors.white70 : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    p.monthName.substring(0, 3),
-                    style: AppTextStyles.body1.copyWith(
-                      color: selected
-                          ? Colors.white
-                          : AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    '${p.year}',
-                    style: AppTextStyles.caption.copyWith(
-                      color: selected
-                          ? Colors.white70
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
 
-  Widget _buildNetSalaryCard() {
-    final p = _currentPayslip;
+  Widget _buildNetSalaryCard(Payslip p) {
     final currFmt = NumberFormat('#,###', 'fr');
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, Color(0xFF283593)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.primaryDark,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.30),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Column(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            BlobAccentBackdrop(color: AppColors.primary),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -220,7 +256,7 @@ class _PayrollScreenState extends State<PayrollScreen>
                       '${currFmt.format(p.netSalary.toInt())} MAD',
                       style: AppTextStyles.stat.copyWith(
                         color: Colors.white,
-                        fontSize: 28,
+                        fontSize: 34,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -281,6 +317,10 @@ class _PayrollScreenState extends State<PayrollScreen>
           ),
         ],
       ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -293,8 +333,7 @@ class _PayrollScreenState extends State<PayrollScreen>
     );
   }
 
-  Widget _buildBreakdownCard() {
-    final p = _currentPayslip;
+  Widget _buildBreakdownCard(Payslip p) {
     final currFmt = NumberFormat('#,###');
 
     return Container(
@@ -461,8 +500,8 @@ class _PayrollScreenState extends State<PayrollScreen>
     );
   }
 
-  Widget _buildSalaryTrendChart() {
-    final spots = _payslips.reversed.toList().asMap().entries.map((e) {
+  Widget _buildSalaryTrendChart(List<Payslip> payslips) {
+    final spots = payslips.reversed.toList().asMap().entries.map((e) {
       return FlSpot(e.key.toDouble(), e.value.netSalary / 1000);
     }).toList();
 
@@ -520,7 +559,7 @@ class _PayrollScreenState extends State<PayrollScreen>
                     sideTitles: SideTitles(
                       showTitles: true,
                       getTitlesWidget: (value, _) {
-                        final payslip = _payslips.reversed
+                        final payslip = payslips.reversed
                             .toList()[value.toInt()];
                         return Text(
                           payslip.monthName.substring(0, 3),
@@ -544,8 +583,14 @@ class _PayrollScreenState extends State<PayrollScreen>
     );
   }
 
-  Widget _buildAttendanceTab() {
-    final records = MockData.attendance;
+  Widget _buildAttendanceTab(List<AttendanceRecord> records) {
+    if (records.isEmpty) {
+      return const EmptyState(
+        icon: Icons.access_time_rounded,
+        title: 'No attendance records',
+        message: 'Your check-ins will appear here once recorded.',
+      );
+    }
     final fmt = DateFormat('EEEE, d MMMM');
     final timeFmt = DateFormat('HH:mm');
     final totalHours = records.fold(0.0, (s, r) => s + r.hoursWorked);

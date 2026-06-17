@@ -1,98 +1,133 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../models/user_account.dart';
+
+/// "Terracotta & Ink" — a warm, editorial palette chosen to read as
+/// human-crafted rather than a generic blue-grey SaaS template. Role colors
+/// are intentionally scoped to identity touch points (banners, the logged-in
+/// user's own header, avatar rings, bottom-nav, login chips) — buttons,
+/// links and FABs always stay brand terracotta so the app doesn't feel like
+/// it's wearing a different skin every time someone else logs in.
 class AppColors {
   AppColors._();
 
-  static const primary = Color(0xFF1A237E);
-  static const primaryLight = Color(0xFF3949AB);
-  static const primaryLighter = Color(0xFFE8EAF6);
-  static const accent = Color(0xFF00ACC1);
-  static const accentLight = Color(0xFFE0F7FA);
-  static const success = Color(0xFF2E7D32);
-  static const successLight = Color(0xFFE8F5E9);
-  static const warning = Color(0xFFF57C00);
-  static const warningLight = Color(0xFFFFF3E0);
-  static const danger = Color(0xFFC62828);
-  static const dangerLight = Color(0xFFFFEBEE);
-  static const pending = Color(0xFF6A1B9A);
-  static const pendingLight = Color(0xFFF3E5F5);
-  static const surface = Color(0xFFF5F7FF);
+  // Brand
+  static const primary = Color(0xFFC1622D); // burnt terracotta
+  static const primaryLight = Color(0xFFD98952);
+  static const primaryLighter = Color(0xFFF6E6D9);
+  static const primaryDark = Color(0xFF8C481E); // header/cover blocks
+  static const accent = Color(0xFF1F6F5C); // deep emerald
+  static const accentLight = Color(0xFFDCEDE7);
+
+  // Surfaces & text — warm ivory, not cold blue-grey
+  static const surface = Color(0xFFFBF7F2);
   static const cardBg = Colors.white;
-  static const textPrimary = Color(0xFF0D1B4B);
-  static const textSecondary = Color(0xFF6B7BA4);
-  static const textLight = Color(0xFFB0BEC5);
-  static const divider = Color(0xFFEEF0F8);
-  static const shimmerBase = Color(0xFFE8EAF6);
-  static const shimmerHighlight = Color(0xFFF5F5FF);
+  static const textPrimary = Color(0xFF2B2422); // warm ink
+  static const textSecondary = Color(0xFF7A6F66);
+  static const textLight = Color(0xFFC2B8AD);
+  static const divider = Color(0xFFEFE6DB);
+  static const shimmerBase = Color(0xFFEFE6DB);
+  static const shimmerHighlight = Color(0xFFFBF7F2);
+
+  // Semantic — re-tuned warm so they sit comfortably next to terracotta/ink
+  static const success = Color(0xFF3F7D52);
+  static const successLight = Color(0xFFE3EFE2);
+  static const warning = Color(0xFFC78A2E);
+  static const warningLight = Color(0xFFF6E9D3);
+  static const danger = Color(0xFFB6453A);
+  static const dangerLight = Color(0xFFF5E1DD);
+  static const pending = Color(0xFF6B2D5C); // deep plum, doubles as Owner role color
+  static const pendingLight = Color(0xFFEDE0E9);
+
+  // Role identity colors — scoped usage only, see class doc.
+  static const roleOwner = Color(0xFF6B2D5C); // deep plum
+  static const roleHrManager = Color(0xFFC1622D); // terracotta (brand primary)
+  static const roleManager = Color(0xFF1F6F5C); // emerald (brand accent)
+  static const roleEmployee = Color(0xFFB8860B); // warm ochre
+
+  static Color roleColor(UserRole role) {
+    switch (role) {
+      case UserRole.owner:
+        return roleOwner;
+      case UserRole.hrManager:
+        return roleHrManager;
+      case UserRole.manager:
+        return roleManager;
+      case UserRole.employee:
+        return roleEmployee;
+    }
+  }
 }
 
 class AppTextStyles {
   AppTextStyles._();
 
-  static TextStyle get displayLarge => GoogleFonts.inter(
+  // Display/heading — Fraunces, a warm serif with real character.
+  static TextStyle get displayLarge => GoogleFonts.fraunces(
         fontSize: 28,
-        fontWeight: FontWeight.w800,
-        color: AppColors.textPrimary,
-        letterSpacing: -0.5,
-      );
-
-  static TextStyle get heading1 => GoogleFonts.inter(
-        fontSize: 22,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
         letterSpacing: -0.3,
       );
 
-  static TextStyle get heading2 => GoogleFonts.inter(
+  static TextStyle get heading1 => GoogleFonts.fraunces(
+        fontSize: 22,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+        letterSpacing: -0.2,
+      );
+
+  static TextStyle get heading2 => GoogleFonts.fraunces(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
       );
 
-  static TextStyle get heading3 => GoogleFonts.inter(
+  static TextStyle get heading3 => GoogleFonts.fraunces(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
       );
 
-  static TextStyle get body1 => GoogleFonts.inter(
+  // Body/UI — Plus Jakarta Sans, warmer and rounder than plain Inter.
+  static TextStyle get body1 => GoogleFonts.plusJakartaSans(
         fontSize: 15,
         fontWeight: FontWeight.w400,
         color: AppColors.textPrimary,
       );
 
-  static TextStyle get body2 => GoogleFonts.inter(
+  static TextStyle get body2 => GoogleFonts.plusJakartaSans(
         fontSize: 13,
         fontWeight: FontWeight.w400,
         color: AppColors.textSecondary,
       );
 
-  static TextStyle get label => GoogleFonts.inter(
+  static TextStyle get label => GoogleFonts.plusJakartaSans(
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: AppColors.textSecondary,
         letterSpacing: 0.4,
       );
 
-  static TextStyle get caption => GoogleFonts.inter(
+  static TextStyle get caption => GoogleFonts.plusJakartaSans(
         fontSize: 11,
         fontWeight: FontWeight.w500,
         color: AppColors.textLight,
       );
 
-  static TextStyle get button => GoogleFonts.inter(
+  static TextStyle get button => GoogleFonts.plusJakartaSans(
         fontSize: 15,
         fontWeight: FontWeight.w600,
         color: Colors.white,
         letterSpacing: 0.3,
       );
 
-  static TextStyle get stat => GoogleFonts.inter(
+  static TextStyle get stat => GoogleFonts.fraunces(
         fontSize: 26,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
-        letterSpacing: -0.5,
+        letterSpacing: -0.4,
       );
 }
 
@@ -108,15 +143,15 @@ ThemeData buildAppTheme() {
       surface: AppColors.surface,
     ),
     scaffoldBackgroundColor: AppColors.surface,
-    textTheme: GoogleFonts.interTextTheme(),
+    textTheme: GoogleFonts.plusJakartaSansTextTheme(),
     appBarTheme: AppBarTheme(
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.inter(
+      titleTextStyle: GoogleFonts.fraunces(
         fontSize: 18,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         color: Colors.white,
       ),
       iconTheme: const IconThemeData(color: Colors.white),
@@ -144,7 +179,7 @@ ThemeData buildAppTheme() {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.surface,
+      fillColor: AppColors.primaryLighter.withValues(alpha: 0.4),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.divider),

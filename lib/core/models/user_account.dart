@@ -1,4 +1,4 @@
-enum UserRole { hrManager, manager, employee }
+enum UserRole { owner, hrManager, manager, employee }
 
 class UserAccount {
   final String email;
@@ -14,5 +14,5 @@ class UserAccount {
   });
 
   bool get isManager =>
-      role == UserRole.hrManager || role == UserRole.manager;
+      role == UserRole.owner || role == UserRole.hrManager || role == UserRole.manager;
 }

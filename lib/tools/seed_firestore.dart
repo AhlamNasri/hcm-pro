@@ -18,6 +18,7 @@ import '../firebase_options.dart';
 import '../core/data/mock_data.dart';
 
 const Map<String, String> emailToUid = {
+  'nawal.idrissi@hcmpro.com': 'TODO_UID_nawal',
   'ahmed.benali@hcmpro.com': 'TODO_UID_ahmed',
   'youssef.tahiri@hcmpro.com': 'TODO_UID_youssef',
   'sara.benhaddou@hcmpro.com': 'TODO_UID_sara',
@@ -30,6 +31,7 @@ const Map<String, String> emailToUid = {
 };
 
 const Map<String, String> emailToEmployeeId = {
+  'nawal.idrissi@hcmpro.com': 'EMP011',
   'ahmed.benali@hcmpro.com': 'EMP001',
   'youssef.tahiri@hcmpro.com': 'EMP005',
   'sara.benhaddou@hcmpro.com': 'EMP006',
@@ -42,6 +44,7 @@ const Map<String, String> emailToEmployeeId = {
 };
 
 const Map<String, String> employeeIdToRole = {
+  'EMP011': 'owner',
   'EMP001': 'hrManager',
   'EMP005': 'manager',
   'EMP006': 'manager',

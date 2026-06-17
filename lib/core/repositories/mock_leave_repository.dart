@@ -19,9 +19,16 @@ class MockLeaveRepository implements LeaveRepository {
     return _watch(() => List.of(MockData.leaveRequests));
   }
 
-  Stream<List<LeaveRequest>> _watch(List<LeaveRequest> Function() snapshot) async* {
-    yield snapshot();
-    yield* _changes.stream.map((_) => snapshot());
+  Stream<List<LeaveRequest>> _watch(List<LeaveRequest> Function() snapshot) {
+    // Stream.multi gives each subscriber its own listener (replayed with the
+    // current snapshot immediately), unlike a single-subscription async*
+    // stream, which throws if more than one StreamBuilder ends up listening
+    // to the same stream instance (happens inside TabBarView/nested builders).
+    return Stream.multi((controller) {
+      controller.add(snapshot());
+      final sub = _changes.stream.listen((_) => controller.add(snapshot()));
+      controller.onCancel = sub.cancel;
+    });
   }
 
   @override

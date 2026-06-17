@@ -17,4 +17,13 @@ abstract class AuthRepository {
 
   /// Returns null on success, an error message on failure.
   Future<String?> changePassword(String currentPassword, String newPassword);
+
+  /// Provisions a login account for a newly added employee (always created
+  /// with [UserRole.employee] — HR can promote them later). Returns the
+  /// generated temporary password so the caller can hand it to the
+  /// employee. Throws if an account for [email] already exists.
+  Future<String> createAccountForEmployee({
+    required String employeeId,
+    required String email,
+  });
 }

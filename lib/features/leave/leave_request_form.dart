@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/leave_request.dart';
+import '../../core/models/user_account.dart';
 import '../../core/services/app_backend.dart';
 import '../../core/services/auth_service.dart';
 import '../../shared/widgets/app_widgets.dart';
@@ -93,18 +94,29 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
     setState(() => _isSubmitting = true);
     try {
       final employee = AuthService.instance.currentEmployee;
+      // The Owner has no one above them to approve a request, so their
+      // leave is self-approved and recorded immediately instead of sitting
+      // pending forever with no possible reviewer.
+      final isOwner =
+          AuthService.instance.currentAccount?.role == UserRole.owner;
       final request = LeaveRequest(
         id: 'LR${DateTime.now().millisecondsSinceEpoch}',
         employeeId: employee.id,
         employeeName: employee.fullName,
         type: _selectedType,
-        status: LeaveStatus.pending,
+        status: isOwner ? LeaveStatus.approved : LeaveStatus.pending,
         startDate: _startDate!,
         endDate: _endDate!,
         reason: _reasonController.text.trim(),
         requestedAt: DateTime.now(),
+        approvedBy: isOwner ? '${employee.fullName} (Owner)' : null,
       );
       await AppBackend.leaveRepository.create(request);
+      if (isOwner) {
+        final newBalance = employee.leaveBalance - request.durationDays;
+        await AppBackend.employeeRepository.update(
+            employee.copyWith(leaveBalance: newBalance < 0 ? 0 : newBalance));
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -114,7 +126,10 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
                   color: Colors.white, size: 18),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('Leave request submitted successfully!',
+                child: Text(
+                    isOwner
+                        ? 'Leave recorded — no approval needed.'
+                        : 'Leave request submitted successfully!',
                     style: AppTextStyles.body2
                         .copyWith(color: Colors.white),
                     overflow: TextOverflow.ellipsis),
@@ -190,6 +205,14 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
   }
 
   Widget _buildLeaveTypeSection() {
+    final labels = {
+      LeaveType.annual: ('Annual', 'Planned time off', Icons.beach_access_rounded),
+      LeaveType.sick: ('Sick', 'Medical leave', Icons.medical_services_rounded),
+      LeaveType.maternity: ('Maternity', 'Maternity leave', Icons.child_friendly_rounded),
+      LeaveType.paternity: ('Paternity', 'Paternity leave', Icons.family_restroom_rounded),
+      LeaveType.remote: ('Remote', 'Work from home', Icons.home_work_rounded),
+      LeaveType.unpaid: ('Unpaid', 'Unpaid leave', Icons.money_off_rounded),
+    };
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -202,48 +225,63 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
         children: [
           Text('Leave Type', style: AppTextStyles.heading3),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 2.4,
             children: LeaveType.values.map((type) {
               final selected = _selectedType == type;
-              final labels = {
-                LeaveType.annual: ('Annual', Icons.beach_access_rounded),
-                LeaveType.sick: ('Sick', Icons.medical_services_rounded),
-                LeaveType.maternity: ('Maternity', Icons.child_friendly_rounded),
-                LeaveType.paternity: ('Paternity', Icons.family_restroom_rounded),
-                LeaveType.remote: ('Remote', Icons.home_work_rounded),
-                LeaveType.unpaid: ('Unpaid', Icons.money_off_rounded),
-              };
               final info = labels[type]!;
               return InkWell(
                 onTap: () => setState(() => _selectedType = type),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.primary
-                        : AppColors.primaryLighter,
-                    borderRadius: BorderRadius.circular(10),
+                    color: selected ? AppColors.primary : AppColors.primaryLighter,
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(info.$2,
-                          size: 16,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
                           color: selected
-                              ? Colors.white
-                              : AppColors.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        info.$1,
-                        style: AppTextStyles.label.copyWith(
-                          color: selected
-                              ? Colors.white
-                              : AppColors.primary,
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(info.$3,
+                            size: 18,
+                            color: selected ? Colors.white : AppColors.primary),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              info.$1,
+                              style: AppTextStyles.body2.copyWith(
+                                color: selected ? Colors.white : AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              info.$2,
+                              style: AppTextStyles.caption.copyWith(
+                                color: selected
+                                    ? Colors.white.withValues(alpha: 0.85)
+                                    : AppColors.textLight,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -259,7 +297,6 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
 
   Widget _buildDateSection(DateFormat fmt) {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(14),
@@ -268,30 +305,32 @@ class _LeaveRequestFormState extends State<LeaveRequestForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Period', style: AppTextStyles.heading3),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _DatePicker(
-                  label: 'Start Date',
-                  value: _startDate != null ? fmt.format(_startDate!) : null,
-                  onTap: () => _pickDate(isStart: true),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text('Period', style: AppTextStyles.heading3),
+          ),
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _DatePicker(
+                    label: 'Start Date',
+                    value: _startDate != null ? fmt.format(_startDate!) : null,
+                    onTap: () => _pickDate(isStart: true),
+                    flat: true,
+                  ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Icon(Icons.arrow_forward_rounded,
-                    color: AppColors.textLight),
-              ),
-              Expanded(
-                child: _DatePicker(
-                  label: 'End Date',
-                  value: _endDate != null ? fmt.format(_endDate!) : null,
-                  onTap: () => _pickDate(isStart: false),
+                Container(width: 1, color: AppColors.divider),
+                Expanded(
+                  child: _DatePicker(
+                    label: 'End Date',
+                    value: _endDate != null ? fmt.format(_endDate!) : null,
+                    onTap: () => _pickDate(isStart: false),
+                    flat: true,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -360,9 +399,10 @@ class _DatePicker extends StatelessWidget {
   final String label;
   final String? value;
   final VoidCallback onTap;
+  final bool flat;
 
   const _DatePicker(
-      {required this.label, this.value, required this.onTap});
+      {required this.label, this.value, required this.onTap, this.flat = false});
 
   @override
   Widget build(BuildContext context) {
@@ -370,18 +410,20 @@ class _DatePicker extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: value != null
-              ? AppColors.primaryLighter
-              : AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: value != null
-                ? AppColors.primary.withValues(alpha: 0.3)
-                : AppColors.divider,
-          ),
-        ),
+        padding: const EdgeInsets.all(16),
+        decoration: flat
+            ? null
+            : BoxDecoration(
+                color: value != null
+                    ? AppColors.primaryLighter
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: value != null
+                      ? AppColors.primary.withValues(alpha: 0.3)
+                      : AppColors.divider,
+                ),
+              ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

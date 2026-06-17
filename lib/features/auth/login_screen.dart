@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/auth_service.dart';
+import '../../shared/widgets/app_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -68,24 +69,15 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  void _fillAccount(String email, String password) {
-    _emailController.text = email;
-    _passwordController.text = password;
-    setState(() => _errorMsg = null);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.primary, Color(0xFF0D47A1)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
+      backgroundColor: AppColors.primaryDark,
+      body: Stack(
+        children: [
+          Container(color: AppColors.primaryDark),
+          AnimatedBlobAccentBackdrop(color: AppColors.primary),
+          SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
@@ -112,8 +104,8 @@ class _LoginScreenState extends State<LoginScreen>
                       Text('HCM Pro',
                           style: AppTextStyles.displayLarge.copyWith(
                             color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
                           )),
                       const SizedBox(height: 4),
                       Text('Human Capital Management',
@@ -203,41 +195,6 @@ class _LoginScreenState extends State<LoginScreen>
                                           .copyWith(fontSize: 16)),
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          Row(children: [
-                            Expanded(child: Divider(color: AppColors.divider)),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text('Quick login',
-                                  style: AppTextStyles.body2),
-                            ),
-                            Expanded(child: Divider(color: AppColors.divider)),
-                          ]),
-                          const SizedBox(height: 14),
-                          _QuickLoginChip(
-                            label: '👔 HR Manager',
-                            subtitle: 'ahmed.benali@hcmpro.com',
-                            color: AppColors.primary,
-                            onTap: () => _fillAccount(
-                                'ahmed.benali@hcmpro.com', 'admin123'),
-                          ),
-                          const SizedBox(height: 8),
-                          _QuickLoginChip(
-                            label: '💼 Manager (CTO)',
-                            subtitle: 'youssef.tahiri@hcmpro.com',
-                            color: AppColors.pending,
-                            onTap: () => _fillAccount(
-                                'youssef.tahiri@hcmpro.com', 'manager123'),
-                          ),
-                          const SizedBox(height: 8),
-                          _QuickLoginChip(
-                            label: '👤 Employee',
-                            subtitle: 'fatima.zahra@hcmpro.com',
-                            color: AppColors.accent,
-                            onTap: () => _fillAccount(
-                                'fatima.zahra@hcmpro.com', 'emp123'),
-                          ),
                         ],
                       ),
                     ),
@@ -254,6 +211,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
+        ],
       ),
     );
   }
@@ -309,64 +267,6 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ],
-    );
-  }
-}
-
-class _QuickLoginChip extends StatelessWidget {
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickLoginChip({
-    required this.label,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.person_rounded, color: color, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: AppTextStyles.body2.copyWith(
-                          color: color, fontWeight: FontWeight.w700)),
-                  Text(subtitle,
-                      style: AppTextStyles.caption,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios_rounded, color: color, size: 14),
-          ],
-        ),
-      ),
     );
   }
 }
